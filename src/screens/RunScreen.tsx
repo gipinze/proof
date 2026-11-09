@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Pressable, Text, useWindowDimensions, View } from 'react-native';
+import { Alert, Pressable, Switch, Text, useWindowDimensions, View } from 'react-native';
 import * as Location from 'expo-location';
 import * as Haptics from 'expo-haptics';
 import { useKeepAwake } from 'expo-keep-awake';
@@ -9,6 +9,12 @@ import { RouteMap } from '../components/RouteMap';
 import { saveRun } from '../db/db';
 import { duration, km, pace, paceFrom, timeOfDay } from '../lib/format';
 import { haversine, simplifyTrack, trackDistance, type TrackPoint } from '../lib/geo';
+import {
+  ensureBackgroundPermission,
+  setBackgroundListener,
+  startBackgroundUpdates,
+  stopBackgroundUpdates,
+} from '../lib/backgroundRun';
 import type { Nav } from '../nav';
 import { colors, radius, space, tabular, type } from '../theme';
 
@@ -24,6 +30,8 @@ export function RunScreen({ nav }: { nav: Nav }) {
   const [permission, setPermission] = useState<'unknown' | 'granted' | 'denied'>('unknown');
   const [saving, setSaving] = useState(false);
   const [gpsStatus, setGpsStatus] = useState<'waiting' | 'ok'>('waiting');
+  /** Opt-in: keep recording with a foreground service when the screen locks. */
+  const [useBackground, setUseBackground] = useState(false);
 
   const startedAtRef = useRef(0);
   const pausedAtRef = useRef<number | null>(null);
@@ -48,6 +56,7 @@ export function RunScreen({ nav }: { nav: Nav }) {
   }, [phase]);
 
   const stopWatch = useCallback(async () => {
+    await stopBackgroundUpdates();
     if (watchRef.current) {
       watchRef.current.remove();
       watchRef.current = null;
@@ -74,6 +83,72 @@ export function RunScreen({ nav }: { nav: Nav }) {
     setGpsStatus('ok');
   }, []);
 
+  // fixes collected by the background service land in the same handler
+  useEffect(() => {
+    setBackgroundListener(onPosition);
+    return () => setBackgroundListener(null);
+  }, [onPosition]);
+
+  /**
+   * Foreground watching is the default. With the switch on, updates come from
+   * a foreground service so locking the screen does not pause the route; if
+   * the background permission is refused we quietly fall back.
+   */
+  const beginTracking = async () => {
+    if (useBackground) {
+      // Android cannot show a simple dialog for background location — it sends
+      // the user to a settings page. Say so before yanking them out of the app.
+      const existing = await Location.getBackgroundPermissionsAsync().catch(() => null);
+      let allowed = existing?.status === 'granted';
+      if (!allowed) {
+        const openSettings = await new Promise<boolean>((resolve) => {
+          Alert.alert(
+            'Allow background location?',
+            'Android will open settings. Choose \u201cAllow all the time\u201d so the route keeps recording with the screen off. Without it Proof only records while it is open.',
+            [
+              { text: 'Foreground only', style: 'cancel', onPress: () => resolve(false) },
+              { text: 'Open settings', onPress: () => resolve(true) },
+            ],
+          );
+        });
+        if (openSettings) allowed = await ensureBackgroundPermission().catch(() => false);
+      }
+      if (allowed) {
+        try {
+          await startBackgroundUpdates();
+          return;
+        } catch (err) {
+          Alert.alert(
+            'Background recording unavailable',
+            err instanceof Error ? err.message : 'Falling back to foreground tracking.',
+          );
+        }
+      } else {
+        Alert.alert(
+          'Background location not allowed',
+          'Proof will keep recording while the app stays open. You can grant “Allow all the time” in Android settings.',
+        );
+      }
+    }
+
+    try {
+      watchRef.current = await Location.watchPositionAsync(
+        {
+          accuracy: Location.Accuracy.BestForNavigation,
+          timeInterval: 1200,
+          distanceInterval: 2,
+        },
+        onPosition,
+      );
+    } catch (err) {
+      setPhase('paused');
+      Alert.alert(
+        'GPS could not start',
+        err instanceof Error ? err.message : 'The location service refused to start.',
+      );
+    }
+  };
+
   const start = async () => {
     const perm = await Location.requestForegroundPermissionsAsync();
     if (perm.status !== 'granted') {
@@ -98,22 +173,7 @@ export function RunScreen({ nav }: { nav: Nav }) {
     const seed = await Location.getLastKnownPositionAsync().catch(() => null);
     if (seed) onPosition(seed);
 
-    try {
-      watchRef.current = await Location.watchPositionAsync(
-        {
-          accuracy: Location.Accuracy.BestForNavigation,
-          timeInterval: 1200,
-          distanceInterval: 2,
-        },
-        onPosition,
-      );
-    } catch (err) {
-      setPhase('paused');
-      Alert.alert(
-        'GPS could not start',
-        err instanceof Error ? err.message : 'The location service refused to start.',
-      );
-    }
+    await beginTracking();
   };
 
   const pause = async () => {
@@ -128,15 +188,7 @@ export function RunScreen({ nav }: { nav: Nav }) {
       pausedAtRef.current = null;
     }
     setPhase('running');
-    try {
-      watchRef.current = await Location.watchPositionAsync(
-        { accuracy: Location.Accuracy.BestForNavigation, timeInterval: 1200, distanceInterval: 2 },
-        onPosition,
-      );
-    } catch (err) {
-      setPhase('paused');
-      Alert.alert('GPS could not resume', err instanceof Error ? err.message : 'Unknown error');
-    }
+    await beginTracking();
   };
 
   const finish = async () => {
@@ -240,6 +292,35 @@ export function RunScreen({ nav }: { nav: Nav }) {
       <View style={{ marginTop: space(6), alignItems: 'center', gap: space(3) }}>
         {phase === 'idle' ? (
           <>
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: space(3),
+                width: '100%',
+                backgroundColor: colors.surface,
+                borderRadius: radius.md,
+                borderWidth: 1,
+                borderColor: colors.border,
+                paddingHorizontal: space(3.5),
+                paddingVertical: space(3),
+              }}
+            >
+              <Ionicons name="moon-outline" size={18} color={colors.muted} />
+              <View style={{ flex: 1 }}>
+                <Text style={{ ...type.body, color: colors.text }}>Record with the screen off</Text>
+                <Text style={{ fontSize: 10.5, color: colors.faint, marginTop: 2 }}>
+                  Foreground service. Android asks for “all the time” location.
+                </Text>
+              </View>
+              <Switch
+                value={useBackground}
+                onValueChange={setUseBackground}
+                trackColor={{ true: colors.accent, false: colors.surfaceHi }}
+                thumbColor="#FFFFFF"
+              />
+            </View>
+
             <Pressable
               onPress={start}
               style={({ pressed }) => ({
@@ -265,7 +346,9 @@ export function RunScreen({ nav }: { nav: Nav }) {
             <Text style={{ ...type.caption, color: colors.muted, textAlign: 'center', maxWidth: 280 }}>
               {permission === 'denied'
                 ? 'Location permission is off — enable it in Android settings to record a route.'
-                : 'Keep the app open while you run. The route stays on this phone.'}
+                : useBackground
+                  ? 'Lock the screen and go — the foreground service keeps the route recording.'
+                  : 'Keep the app open while you run. The route stays on this phone.'}
             </Text>
           </>
         ) : (

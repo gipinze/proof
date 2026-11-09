@@ -13,6 +13,8 @@ import { ATHLETE_KEY, getSetting } from './src/db/settings';
 import type { ExerciseDef } from './src/data/exercises';
 import { emptyDraft, newKey, type LiftDraft, type Nav, type Route } from './src/nav';
 import { duration } from './src/lib/format';
+// registers the background location task at startup, before any run starts
+import './src/lib/backgroundRun';
 import { colors, space, type } from './src/theme';
 
 type TabName = 'home' | 'run' | 'library';

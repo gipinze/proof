@@ -1,5 +1,6 @@
 import { captureRef } from 'react-native-view-shot';
-import { Asset, requestPermissionsAsync } from 'expo-media-library';
+import * as FileSystem from 'expo-file-system/legacy';
+import { Album, Asset, requestPermissionsAsync } from 'expo-media-library';
 import * as Sharing from 'expo-sharing';
 import { Alert } from 'react-native';
 
@@ -16,31 +17,71 @@ export async function captureCard(ref: Ref, width: number, height: number): Prom
   });
 }
 
+/** `proof-2026-11-09-carry-day.png` — what shows up in the gallery and share sheet. */
+export function cardFilename(title: string, startedAt: number, kind: 'lift' | 'run'): string {
+  const date = new Date(startedAt);
+  const ymd = [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+  ].join('-');
+
+  const slug = title
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40)
+    .replace(/-+$/g, '');
+
+  return `proof-${ymd}-${slug || kind}.png`;
+}
+
+const ALBUM = 'Proof';
+
+/** Copy the snapshot to a properly named file so the gallery is readable. */
+export async function nameCard(snapshotUri: string, filename: string): Promise<string> {
+  const dir = FileSystem.cacheDirectory ?? '';
+  const target = `${dir}${filename}`;
+  await FileSystem.copyAsync({ from: snapshotUri, to: target });
+  return target;
+}
+
 /**
- * Save the card to the phone's gallery.
- *
- * SDK 58 replaced the old `saveToLibraryAsync` helper with the class API
- * (`Asset.create`), which writes through MediaStore and normally needs no
- * runtime permission on Android 10+. Permission is only requested if that
- * write is refused, so a first save does not open an "allow all photos"
- * dialog for an app that only ever writes one file.
+ * Save to the gallery under a sensible name, inside a "Proof" album. Falls back
+ * to the camera roll if album creation is unavailable, and asks for permission
+ * only if the unpermissioned write is refused (Android 10+ needs none).
  */
 export async function saveToGallery(uri: string): Promise<boolean> {
+  const save = async () => {
+    const asset = await Asset.create(uri);
+    try {
+      const album = (await Album.get(ALBUM)) ?? (await Album.create(ALBUM, [asset], true));
+      if (await Album.get(ALBUM)) {
+        // asset already filed when the album was created; nothing else to do
+        void album;
+      }
+    } catch {
+      // album is a nicety — the file is already in the camera roll
+    }
+  };
+
   try {
-    await Asset.create(uri);
+    await save();
     return true;
   } catch {
     try {
       const perm = await requestPermissionsAsync();
-      if (perm.granted) {
-        await Asset.create(uri);
-        return true;
+      if (!perm.granted) {
+        Alert.alert(
+          'Gallery access needed',
+          'Proof needs permission to save the card. You can always use Share instead.',
+        );
+        return false;
       }
-      Alert.alert(
-        'Gallery access needed',
-        'Proof needs permission to save the card. You can always use Share instead.',
-      );
-      return false;
+      await save();
+      return true;
     } catch (err) {
       Alert.alert('Could not save', err instanceof Error ? err.message : 'Unknown error');
       return false;

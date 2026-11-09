@@ -2,9 +2,18 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Modal, Pressable, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Button, Card, IconButton, Screen, SectionLabel, Stat } from '../components/ui';
-import { listSessionSummaries, statsSince, type SessionListItem } from '../db/db';
+import {
+  listSessionSummaries,
+  muscleSetsSince,
+  statsSince,
+  weeklyVolume,
+  type SessionListItem,
+  type WeekBucket,
+} from '../db/db';
 import { getSetting, setSetting, ATHLETE_KEY } from '../db/settings';
 import { duration, km, num, relativeDay, volumeParts } from '../lib/format';
+import { MUSCLE_NAME } from '../data/muscles';
+import type { MuscleId } from '../data/anatomy';
 import type { Nav } from '../nav';
 import { colors, radius, space, tabular, type } from '../theme';
 
@@ -19,16 +28,28 @@ export function HomeScreen({
 }) {
   const [sessions, setSessions] = useState<SessionListItem[]>([]);
   const [week, setWeek] = useState({ volume: 0, distanceM: 0, lifts: 0, runs: 0 });
+  const [weekBuckets, setWeekBuckets] = useState<WeekBucket[]>([]);
+  const [topMuscles, setTopMuscles] = useState<{ id: MuscleId; load: number }[]>([]);
   const [editing, setEditing] = useState(false);
   const [nameDraft, setNameDraft] = useState(athlete);
 
   const load = useCallback(async () => {
-    const [list, stats] = await Promise.all([
+    const weekStart = startOfWeek();
+    const [list, stats, buckets, muscle] = await Promise.all([
       listSessionSummaries(25),
-      statsSince(startOfWeek()),
+      statsSince(weekStart),
+      weeklyVolume(6),
+      muscleSetsSince(weekStart),
     ]);
     setSessions(list);
     setWeek(stats);
+    setWeekBuckets(buckets);
+    setTopMuscles(
+      Object.entries(muscle)
+        .map(([id, load]) => ({ id: id as MuscleId, load }))
+        .sort((a, b) => b.load - a.load)
+        .slice(0, 5),
+    );
   }, []);
 
   useEffect(() => {
@@ -121,6 +142,81 @@ export function HomeScreen({
           style={{ flex: 1 }}
         />
       </View>
+
+      {weekBuckets.some((b) => b.volume > 0 || b.distanceM > 0) ? (
+        <>
+          <SectionLabel>Last 6 weeks</SectionLabel>
+          <Card>
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'flex-end',
+                justifyContent: 'space-between',
+                height: 92,
+                gap: space(2),
+              }}
+            >
+              {weekBuckets.map((bucket, index) => {
+                const max = Math.max(1, ...weekBuckets.map((b) => b.volume));
+                const height = Math.max(4, Math.round((bucket.volume / max) * 72));
+                const isCurrent = index === weekBuckets.length - 1;
+                return (
+                  <View key={bucket.weekStart} style={{ flex: 1, alignItems: 'center', gap: 6 }}>
+                    <Text style={{ ...type.tiny, color: colors.faint, ...tabular }}>
+                      {bucket.volume > 0 ? volumeParts(bucket.volume).value : '·'}
+                    </Text>
+                    <View
+                      style={{
+                        width: '100%',
+                        height,
+                        borderRadius: radius.sm,
+                        backgroundColor: isCurrent ? colors.accent : colors.surfaceHi,
+                      }}
+                    />
+                    <Text style={{ ...type.tiny, color: isCurrent ? colors.accentText : colors.faint }}>
+                      {isCurrent ? 'NOW' : `-${weekBuckets.length - 1 - index}w`}
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+          </Card>
+        </>
+      ) : null}
+
+      {topMuscles.length > 0 ? (
+        <>
+          <SectionLabel>This week by muscle</SectionLabel>
+          <Card>
+            {topMuscles.map((muscle, index) => {
+              const max = Math.max(1, ...topMuscles.map((m) => m.load));
+              const width = Math.max(6, Math.round((muscle.load / max) * 100));
+              return (
+                <View key={muscle.id} style={{ marginTop: index === 0 ? 0 : space(2.5) }}>
+                  <View style={{ flexDirection: 'row', marginBottom: 4 }}>
+                    <Text style={{ ...type.caption, color: colors.text, flex: 1 }}>
+                      {MUSCLE_NAME[muscle.id]}
+                    </Text>
+                    <Text style={{ ...type.tiny, color: colors.faint, ...tabular }}>
+                      {muscle.load.toFixed(1)} sets
+                    </Text>
+                  </View>
+                  <View style={{ height: 6, borderRadius: 3, backgroundColor: colors.surfaceHi }}>
+                    <View
+                      style={{
+                        width: `${width}%`,
+                        height: 6,
+                        borderRadius: 3,
+                        backgroundColor: index === 0 ? colors.accent : colors.accentDim,
+                      }}
+                    />
+                  </View>
+                </View>
+              );
+            })}
+          </Card>
+        </>
+      ) : null}
 
       <SectionLabel
         right={

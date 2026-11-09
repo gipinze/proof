@@ -11,7 +11,9 @@ import {
   deleteSession,
   getSession,
   getSessionSets,
+  personalRecords,
   renameSession,
+  type SessionPR,
   type SessionRow,
   type StoredSet,
 } from '../db/db';
@@ -27,12 +29,17 @@ export function SessionScreen({ nav, sessionId }: { nav: Nav; sessionId: number 
   const [sets, setSets] = useState<StoredSet[]>([]);
   const [renaming, setRenaming] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
+  const [prs, setPrs] = useState<Map<string, SessionPR>>(new Map());
 
   const load = useCallback(async () => {
     const row = await getSession(sessionId);
     setSession(row);
     if (row) setTitleDraft(row.title);
-    if (row?.kind === 'lift') setSets(await getSessionSets(sessionId));
+    if (row?.kind === 'lift') {
+      const stored = await getSessionSets(sessionId);
+      setSets(stored);
+      setPrs(await personalRecords(row, stored).catch(() => new Map()));
+    }
   }, [sessionId]);
 
   useEffect(() => {
@@ -113,6 +120,7 @@ export function SessionScreen({ nav, sessionId }: { nav: Nav; sessionId: number 
   const distanceM = session.distance_m ?? 0;
   const seconds = session.duration_s ?? 0;
   const hasDistanceWork = summary.distanceM > 0;
+  const prCount = [...prs.values()].filter((p) => p.isPR).length;
 
   return (
     <Screen scroll>
@@ -222,6 +230,7 @@ export function SessionScreen({ nav, sessionId }: { nav: Nav; sessionId: number 
           <SectionLabel
             right={
               <Text style={{ ...type.caption, color: colors.muted }}>
+                {prCount > 0 ? `${prCount} PR · ` : ''}
                 {summary.reps > 0
                   ? `${summary.reps} reps · `
                   : summary.distanceM > 0
@@ -242,8 +251,24 @@ export function SessionScreen({ nav, sessionId }: { nav: Nav; sessionId: number 
               const distance = list.reduce((sum, s) => sum + (s.distance_m ?? 0), 0);
               return (
                 <Card key={exerciseId} style={{ padding: space(3.5) }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <Text style={{ ...type.body, color: colors.text, flex: 1 }}>{exercise.name}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: space(2) }}>
+                    <Text style={{ ...type.body, color: colors.text, flex: 1 }} numberOfLines={1}>
+                      {exercise.name}
+                    </Text>
+                    {prs.get(exerciseId)?.isPR ? (
+                      <View
+                        style={{
+                          backgroundColor: colors.accent,
+                          borderRadius: radius.sm,
+                          paddingHorizontal: space(1.5),
+                          paddingVertical: 2,
+                        }}
+                      >
+                        <Text style={{ fontSize: 9.5, fontWeight: '900', color: '#fff', letterSpacing: 0.6 }}>
+                          PR
+                        </Text>
+                      </View>
+                    ) : null}
                     <Text style={{ ...type.caption, color: colors.muted, ...tabular }}>
                       {isDistance ? `${num(Math.round(distance))} m` : kgLabel(volume)}
                     </Text>

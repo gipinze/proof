@@ -26,6 +26,17 @@ if ($Full -or -not (Test-Path $Mirror)) {
   }
 }
 
+# the mirror has its own node_modules (a copy); keep it in step with package.json
+Push-Location $Mirror
+try {
+  cmd /c "npm install --no-audit --no-fund --silent > `"$Mirror\npm-install.log`" 2>&1"
+  if ($LASTEXITCODE -ne 0) {
+    Get-Content "$Mirror\npm-install.log" -Tail 15
+    throw "npm install in the mirror failed ($LASTEXITCODE)"
+  }
+} finally {
+  Pop-Location
+}
 # regenerate the native project so app.json / plugin changes take effect
 # (prebuild without --clean is idempotent and re-applies config plugins).
 # Run it through cmd: npm prints notices on stderr, which PowerShell would

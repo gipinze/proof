@@ -2,9 +2,9 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, ScrollView, Text, View } from 'react-native';
 import { Button, Chip, IconButton, TOP_INSET } from '../components/ui';
 import { CARD_WIDTH, ShareCard, cardHeight, type CardFormat, type CardModel } from '../components/ShareCard';
-import { getSession, getSessionSets, type SessionRow } from '../db/db';
+import { getSession, getSessionSets, personalRecords, type SessionRow } from '../db/db';
 import { duration, durationLong, fullDate, km, num, pace, paceFrom } from '../lib/format';
-import { captureCard, saveToGallery, shareImage } from '../lib/share';
+import { captureCard, cardFilename, nameCard, saveToGallery, shareImage } from '../lib/share';
 import { muscleLoad, normalisedLoad, summarizeSets, type SetEntry } from '../lib/volume';
 import type { TrackPoint } from '../lib/geo';
 import type { Nav } from '../nav';
@@ -23,6 +23,7 @@ export function ShareScreen({
   const [sets, setSets] = useState<SetEntry[]>([]);
   const [format, setFormat] = useState<CardFormat>('story');
   const [busy, setBusy] = useState<'save' | 'share' | null>(null);
+  const [prCount, setPrCount] = useState(0);
   const cardRef = useRef<React.ComponentRef<typeof View>>(null);
 
   const load = useCallback(async () => {
@@ -40,6 +41,8 @@ export function ShareScreen({
           isWarmup: s.is_warmup === 1,
         })),
       );
+      const prs = await personalRecords(row, stored).catch(() => new Map());
+      setPrCount([...prs.values()].filter((p) => p.isPR).length);
     }
   }, [sessionId]);
 
@@ -107,7 +110,7 @@ export function ShareScreen({
         !hasVolume && hasDistance && summary.distanceTimeS > 0
           ? ` · ${durationLong(summary.distanceTimeS)}`
           : ''
-      }`,
+      }${prCount > 0 ? ` · ${prCount} PR` : ''}`,
       load: normalisedLoad(muscleLoad(sets)),
       format,
     };
@@ -116,7 +119,10 @@ export function ShareScreen({
   const capture = async () => {
     if (!cardRef.current) throw new Error('Card is not ready yet');
     const height = format === 'story' ? 1920 : 1350;
-    return captureCard(cardRef, 1080, height);
+    const snapshot = await captureCard(cardRef, 1080, height);
+    // a readable name in the gallery and in the share sheet
+    const filename = cardFilename(session?.title ?? 'proof', session?.started_at ?? Date.now(), 'lift');
+    return nameCard(snapshot, filename).catch(() => snapshot);
   };
 
   const onSave = async () => {

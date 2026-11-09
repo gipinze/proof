@@ -9,7 +9,7 @@ The point: you don't need Strava Premium, or any subscription, to post a
 correct-looking training card with a route on it.
 
 ```
-dist\proof-0.3.0.apk
+dist\proof-0.4.0.apk
 ```
 
 | Run card (story, 1080×1920) | Lift card (feed, 1080×1350) |
@@ -21,14 +21,15 @@ dist\proof-0.3.0.apk
 | ![Home](docs/screen-home.png) | ![Session](docs/screen-session-lift.png) | ![Library](docs/screen-library.png) |
 ---
 
-## What v0.3 does
+## What v0.4 does
 
 | Screen | What it does |
 | --- | --- |
 | **Home** | This week's volume, sessions and distance; recent activity; your name (used on cards). |
 | **Log a lift** | Search 100+ exercises, add sets (weight × reps), live total volume, finish → saved session. |
-| **Run** | GPS recording: live distance / pace / time and the route drawing itself. Pause, resume, finish. |
+| **Run** | GPS recording: live distance / pace / time and the route drawing itself. Pause, resume, finish. Optional foreground service keeps recording with the screen off. |
 | **Library** | Every exercise with its muscle map — front and back, primary vs secondary. |
+| **Progress** | Home charts: volume for the last six weeks, and the muscles you actually hit this week. |
 | **Session** | Full breakdown: volume, sets, an anatomy heatmap of what you trained — or the route. |
 | **Share card** | 9:16 story or 4:5 feed, exported at 1080 px wide, saved to the gallery or sent to any app. |
 
@@ -52,6 +53,8 @@ has only distance). Those sets contribute **kg·m** — `weight × load factor �
 metres` — which is shown as *Carried* instead of *Volume*, so "40 kg × 20 m" is
 1,600 kg·m and a 2,000 m row is 2,000 m with no tonnage. Mixing the two in one
 session is fine; the summary reports both.
+
+**1c. PRs.** Best estimated 1RM per exercise (Epley on total load), compared only against sessions that *started earlier* — so reopening an old session never makes it beat itself, and a first-ever lift is not a PR.
 
 **2. Muscle map.** `Σ hard sets per muscle`, weighted by role — primary 3 → 1.0,
 secondary 2 → 0.55, stabiliser 1 → 0.28 — then normalised to the hardest-hit
@@ -113,14 +116,14 @@ outshines the bench press you actually came to do.
 
 <https://github.com/gipinze/proof/releases/latest>
 
-Tap the `proof-0.3.0.apk` asset, then allow "install unknown apps" for your
+Tap the `proof-0.4.0.apk` asset, then allow "install unknown apps" for your
 browser when Android asks. Requires Android 7+ (`minSdkVersion 24`); the APK has
 `arm64-v8a` and `x86_64` binaries.
 
 Other routes:
 
 ```powershell
-adb install -r dist\proof-0.3.0.apk     # phone plugged in, USB debugging on
+adb install -r dist\proof-0.4.0.apk     # phone plugged in, USB debugging on
 npm run apk                             # rebuild the release APK yourself
 ```
 
@@ -276,11 +279,13 @@ Rules of thumb:
 
 ---
 
-## Deliberate v0.3 limits
+## Deliberate v0.4 limits
 
-- **Foreground GPS only.** Keep the app open while running; screen can stay on
-  (keep-awake is enabled on the Run tab). Background tracking needs a foreground
-  service — next on the list.
+- **Background run tracking is opt-in** (switch on the Run tab). It uses a
+  foreground service and needs “Allow all the time” location; when it is off, or
+  the permission is refused, recording falls back to foreground-only. Verified
+  that the service starts and stops on an emulator, but the actual keep-recording
+  -with-the-screen-off path needs a real device walk.
 - **No history charts yet.** Sessions and per-session breakdown exist; trends do not.
 - **No heart rate / watch sync.** The card shows Sets where Strava shows Avg HR.
 - **No templates or routines.** Every workout is built ad hoc.

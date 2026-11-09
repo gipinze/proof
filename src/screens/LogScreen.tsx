@@ -24,6 +24,8 @@ export function LogScreen({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [now, setNow] = useState(Date.now());
   const [saving, setSaving] = useState(false);
+  /** Edit mode: extend the session end time to "now" instead of keeping it. */
+  const [extendToNow, setExtendToNow] = useState(false);
   const lastWeightCache = useRef<Record<string, number | null>>({});
 
   useEffect(() => {
@@ -128,8 +130,12 @@ export function LogScreen({
     setSaving(true);
     try {
       if (editId) {
-        // keep the original finish time: correcting a typo should not add minutes
-        await updateLift(editId, { title, sets });
+        // keep the original finish time unless the user says they are still going
+        await updateLift(editId, {
+          title,
+          sets,
+          ...(extendToNow ? { endedAt: Date.now() } : {}),
+        });
         setDraft({ startedAt: Date.now(), title: '', exercises: [] });
         nav.bump();
         nav.reset({ name: 'session', id: editId });
@@ -170,9 +176,38 @@ export function LogScreen({
         <Screen scroll contentStyle={{ paddingBottom: space(4) }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: space(2) }}>
             <IconButton icon="chevron-back" onPress={discard} size={34} bg={colors.surface} />
-            <Text style={{ ...type.caption, color: colors.muted }}>
-              {editId ? 'Saved session' : `${duration((now - draft.startedAt) / 1000)} elapsed`}
-            </Text>
+            {editId ? (
+              <Pressable
+                onPress={() => setExtendToNow((v) => !v)}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 5,
+                  backgroundColor: extendToNow ? colors.accentDim : colors.surfaceAlt,
+                  borderRadius: radius.pill,
+                  paddingHorizontal: space(3),
+                  paddingVertical: 6,
+                }}
+              >
+                <Ionicons
+                  name={extendToNow ? 'time' : 'time-outline'}
+                  size={13}
+                  color={extendToNow ? colors.accentText : colors.muted}
+                />
+                <Text
+                  style={{
+                    ...type.caption,
+                    color: extendToNow ? colors.accentText : colors.muted,
+                  }}
+                >
+                  {extendToNow ? 'Ends when I save' : 'Keep old end time'}
+                </Text>
+              </Pressable>
+            ) : (
+              <Text style={{ ...type.caption, color: colors.muted }}>
+                {`${duration((now - draft.startedAt) / 1000)} elapsed`}
+              </Text>
+            )}
             <View style={{ flex: 1 }} />
             <View
               style={{

@@ -345,3 +345,121 @@ export async function statsSince(fromMs: number): Promise<WeekStats> {
     runs: rows.filter((r) => r.kind === 'run').length,
   };
 }
+
+// ----------------------------------------------------------------- progress
+
+/** Epley estimated 1RM on the *total* load (dumbbells already doubled). */
+export function estimate1rm(weight: number, loadFactor: number, reps: number): number {
+  if (weight <= 0 || reps <= 0) return 0;
+  return weight * loadFactor * (1 + reps / 30);
+}
+
+export type SessionPR = { exerciseId: string; best: number; previous: number; isPR: boolean };
+
+/**
+ * Which lifts in this session beat everything recorded before it. Compares the
+ * session's best estimated 1RM per exercise with the best from earlier
+ * sessions only, so re-opening a session never makes it beat itself.
+ */
+export async function personalRecords(
+  session: SessionRow,
+  sets: StoredSet[],
+): Promise<Map<string, SessionPR>> {
+  const db = await getDb();
+  const ids = [
+    ...new Set(
+      sets
+        .filter((s) => !s.is_warmup && s.reps > 0 && s.weight > 0)
+        .map((s) => s.exercise_id),
+    ),
+  ];
+  if (ids.length === 0) return new Map();
+
+  const placeholders = ids.map(() => '?').join(',');
+  const history = await db.getAllAsync<{ exercise_id: string; weight: number; reps: number }>(
+    `SELECT s.exercise_id, s.weight, s.reps
+       FROM sets s JOIN sessions ss ON ss.id = s.session_id
+      WHERE s.exercise_id IN (${placeholders})
+        AND s.is_warmup = 0 AND s.reps > 0 AND s.weight > 0
+        AND ss.started_at < ?`,
+    [...ids, session.started_at],
+  );
+
+  const previous = new Map<string, number>();
+  for (const row of history) {
+    const value = estimate1rm(row.weight, getExercise(row.exercise_id).loadFactor, row.reps);
+    previous.set(row.exercise_id, Math.max(previous.get(row.exercise_id) ?? 0, value));
+  }
+
+  const out = new Map<string, SessionPR>();
+  for (const id of ids) {
+    const factor = getExercise(id).loadFactor;
+    const best = sets
+      .filter((s) => s.exercise_id === id && !s.is_warmup && s.reps > 0)
+      .reduce((max, s) => Math.max(max, estimate1rm(s.weight, factor, s.reps)), 0);
+    const before = previous.get(id) ?? 0;
+    // no history means "first time", not a personal record
+    out.set(id, { exerciseId: id, best, previous: before, isPR: before > 0 && best > before + 0.01 });
+  }
+  return out;
+}
+
+export type WeekBucket = { weekStart: number; volume: number; distanceM: number };
+
+/** Monday-starting volume buckets for the progress chart. */
+export async function weeklyVolume(weeks = 6): Promise<WeekBucket[]> {
+  const db = await getDb();
+  const now = new Date();
+  const monday = new Date(now);
+  monday.setHours(0, 0, 0, 0);
+  monday.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+  const firstWeek = new Date(monday);
+  firstWeek.setDate(monday.getDate() - (weeks - 1) * 7);
+
+  const rows = await db.getAllAsync<{
+    exercise_id: string;
+    weight: number;
+    reps: number;
+    distance_m: number | null;
+    is_warmup: number;
+    started_at: number;
+  }>(
+    `SELECT s.exercise_id, s.weight, s.reps, s.distance_m, s.is_warmup, ss.started_at
+       FROM sets s JOIN sessions ss ON ss.id = s.session_id
+      WHERE ss.started_at >= ? AND ss.kind = 'lift'`,
+    [firstWeek.getTime()],
+  );
+
+  const buckets: WeekBucket[] = [];
+  for (let i = 0; i < weeks; i++) {
+    const start = new Date(firstWeek);
+    start.setDate(firstWeek.getDate() + i * 7);
+    buckets.push({ weekStart: start.getTime(), volume: 0, distanceM: 0 });
+  }
+
+  for (const row of rows) {
+    if (row.is_warmup) continue;
+    const index = Math.floor((row.started_at - firstWeek.getTime()) / (7 * 24 * 3600 * 1000));
+    if (index < 0 || index >= buckets.length) continue;
+    const def = getExercise(row.exercise_id);
+    if (def.measure === 'distance') buckets[index].distanceM += row.distance_m ?? 0;
+    else buckets[index].volume += row.weight * def.loadFactor * row.reps;
+  }
+
+  return buckets;
+}
+
+/** Hard sets per muscle since a date � the Home "split" bars. */
+export async function muscleSetsSince(fromMs: number): Promise<Record<string, number>> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<{ exercise_id: string }>(
+    `SELECT s.exercise_id
+       FROM sets s JOIN sessions ss ON ss.id = s.session_id
+      WHERE ss.started_at >= ? AND s.is_warmup = 0`,
+    [fromMs],
+  );
+
+  const { muscleLoad } = await import('../lib/volume');
+  const load = muscleLoad(rows.map((r) => ({ exerciseId: r.exercise_id, weight: 1, reps: 1 })));
+  return load as Record<string, number>;
+}
