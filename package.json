@@ -1,0 +1,38 @@
+{
+  "name": "proof",
+  "version": "0.1.0",
+  "private": true,
+  "main": "index.ts",
+  "scripts": {
+    "start": "expo start",
+    "android": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run-android.ps1",
+    "android:release": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run-android.ps1 -Release",
+    "studio": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/open-studio.ps1",
+    "sync": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/sync-mirror.ps1",
+    "prebuild": "expo prebuild --platform android --clean",
+    "apk": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run-android.ps1 -Release -NoLaunch",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@expo/vector-icons": "^15.0.2",
+    "expo": "~58.0.23",
+    "expo-file-system": "~58.0.13",
+    "expo-haptics": "~58.0.7",
+    "expo-keep-awake": "~58.0.3",
+    "expo-location": "~58.0.20",
+    "expo-media-library": "~58.0.13",
+    "expo-sharing": "~58.0.22",
+    "expo-sqlite": "~58.0.15",
+    "expo-status-bar": "~58.0.4",
+    "react": "19.3.0",
+    "react-native": "0.88.1",
+    "react-native-svg": "15.16.0",
+    "react-native-view-shot": "6.1.1"
+  },
+  "devDependencies": {
+    "@types/react": "~19.3.0",
+    "sharp": "^0.35.5",
+    "tsx": "^4.23.15",
+    "typescript": "~6.0.3"
+  }
+}

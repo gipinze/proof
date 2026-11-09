@@ -1,0 +1,48 @@
+{
+  "expo": {
+    "name": "Proof",
+    "slug": "proof",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "proof",
+    "backgroundColor": "#0A0A0C",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.proofofgains.app",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Proof records your route while you run. Everything stays on this phone."
+      }
+    },
+    "android": {
+      "package": "com.proofofgains.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#0A0A0C",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION"
+      ]
+    },
+    "plugins": [
+      "./plugins/withTrimmedPermissions",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Proof records your route while you run. Everything stays on this phone."
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Proof saves your share cards to your gallery.",
+          "savePhotosPermission": "Proof saves your share cards to your gallery."
+        }
+      ]
+    ]
+  }
+}
