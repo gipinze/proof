@@ -1,32 +1,25 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { Alert, Pressable, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Button, Card, IconButton, Screen, SectionLabel } from '../components/ui';
+import { Button, Card, IconButton, Screen } from '../components/ui';
 import { ExercisePicker } from '../components/ExercisePicker';
 import { getExercise, type ExerciseDef } from '../data/exercises';
-import { saveLift, lastWeightFor } from '../db/db';
+import { lastDistanceFor, lastWeightFor, saveLift, updateLift } from '../db/db';
 import { duration, kgLabel, num, timeOfDay } from '../lib/format';
 import { summarizeSets, type SetEntry } from '../lib/volume';
-import { draftToSets, newKey, type LiftDraft, type Nav } from '../nav';
+import { draftToSets, newKey, type DraftExercise, type DraftSet, type LiftDraft, type Nav } from '../nav';
 import { colors, radius, space, tabular, type } from '../theme';
 
 export function LogScreen({
   nav,
   draft,
   setDraft,
+  editId,
 }: {
   nav: Nav;
   draft: LiftDraft;
   setDraft: React.Dispatch<React.SetStateAction<LiftDraft>>;
+  editId?: number;
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [now, setNow] = useState(Date.now());
@@ -47,8 +40,16 @@ export function LogScreen({
   const addExercise = useCallback(
     async (exercise: ExerciseDef) => {
       setPickerOpen(false);
-      const prev = await lastWeightFor(exercise.id);
-      const suggested = prev ?? (exercise.loadFactor === 0 ? 0 : exercise.equipment === 'barbell' ? 40 : 10);
+      const [prevWeight, prevDistance] = await Promise.all([
+        lastWeightFor(exercise.id),
+        lastDistanceFor(exercise.id),
+      ]);
+      lastWeightCache.current[exercise.id] = prevWeight;
+
+      const isDistance = exercise.measure === 'distance';
+      const suggestedWeight =
+        prevWeight ?? (exercise.loadFactor === 0 ? 0 : exercise.equipment === 'barbell' ? 40 : 10);
+
       setDraft((d) => ({
         ...d,
         exercises: [
@@ -56,7 +57,14 @@ export function LogScreen({
           {
             key: newKey(),
             exerciseId: exercise.id,
-            sets: [{ key: newKey(), weight: String(suggested), reps: '8' }],
+            sets: [
+              {
+                key: newKey(),
+                weight: String(isDistance && exercise.loadFactor === 0 ? 0 : suggestedWeight),
+                reps: '8',
+                distance: String(prevDistance ?? (isDistance ? 20 : 0)),
+              },
+            ],
           },
         ],
       }));
@@ -64,7 +72,7 @@ export function LogScreen({
     [setDraft],
   );
 
-  const updateSet = (exKey: string, setKey: string, patch: Partial<{ weight: string; reps: string }>) => {
+  const updateSet = (exKey: string, setKey: string, patch: Partial<DraftSet>) => {
     setDraft((d) => ({
       ...d,
       exercises: d.exercises.map((ex) =>
@@ -83,7 +91,15 @@ export function LogScreen({
         const last = ex.sets[ex.sets.length - 1];
         return {
           ...ex,
-          sets: [...ex.sets, { key: newKey(), weight: last?.weight ?? '0', reps: last?.reps ?? '8' }],
+          sets: [
+            ...ex.sets,
+            {
+              key: newKey(),
+              weight: last?.weight ?? '0',
+              reps: last?.reps ?? '8',
+              distance: last?.distance ?? '20',
+            },
+          ],
         };
       }),
     }));
@@ -104,20 +120,22 @@ export function LogScreen({
 
   const finish = async () => {
     if (sets.length === 0) {
-      Alert.alert('Nothing to save', 'Add at least one set with reps before finishing.');
+      Alert.alert('Nothing to save', 'Add at least one set with reps or distance before finishing.');
       return;
     }
     setSaving(true);
     try {
-      const id = await saveLift({
-        title,
-        startedAt: draft.startedAt,
-        endedAt: Date.now(),
-        sets,
-      });
-      setDraft({ startedAt: Date.now(), title: '', exercises: [] });
-      nav.bump();
-      nav.reset({ name: 'session', id });
+      if (editId) {
+        await updateLift(editId, { title, sets, endedAt: Date.now() });
+        setDraft({ startedAt: Date.now(), title: '', exercises: [] });
+        nav.bump();
+        nav.reset({ name: 'session', id: editId });
+      } else {
+        const id = await saveLift({ title, startedAt: draft.startedAt, endedAt: Date.now(), sets });
+        setDraft({ startedAt: Date.now(), title: '', exercises: [] });
+        nav.bump();
+        nav.reset({ name: 'session', id });
+      }
     } catch (err) {
       Alert.alert('Could not save', err instanceof Error ? err.message : 'Unknown error');
     } finally {
@@ -130,7 +148,7 @@ export function LogScreen({
       nav.back();
       return;
     }
-    Alert.alert('Discard workout?', 'Your sets will be lost.', [
+    Alert.alert(editId ? 'Discard changes?' : 'Discard workout?', 'Your edits will be lost.', [
       { text: 'Keep editing', style: 'cancel' },
       {
         text: 'Discard',
@@ -150,7 +168,7 @@ export function LogScreen({
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: space(2) }}>
             <IconButton icon="chevron-back" onPress={discard} size={34} bg={colors.surface} />
             <Text style={{ ...type.caption, color: colors.muted }}>
-              {duration((now - draft.startedAt) / 1000)} elapsed
+              {editId ? 'Saved session' : `${duration((now - draft.startedAt) / 1000)} elapsed`}
             </Text>
             <View style={{ flex: 1 }} />
             <View
@@ -158,14 +176,23 @@ export function LogScreen({
                 flexDirection: 'row',
                 alignItems: 'center',
                 gap: 6,
-                backgroundColor: colors.accentDim,
+                backgroundColor: editId ? colors.surfaceAlt : colors.accentDim,
                 paddingHorizontal: space(3),
                 paddingVertical: 5,
                 borderRadius: radius.pill,
               }}
             >
-              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.accent }} />
-              <Text style={{ ...type.tiny, color: colors.accentText }}>LIVE</Text>
+              <View
+                style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: 3,
+                  backgroundColor: editId ? colors.muted : colors.accent,
+                }}
+              />
+              <Text style={{ ...type.tiny, color: editId ? colors.muted : colors.accentText }}>
+                {editId ? 'EDITING' : 'LIVE'}
+              </Text>
             </View>
           </View>
 
@@ -174,12 +201,7 @@ export function LogScreen({
             onChangeText={(t) => setDraft((d) => ({ ...d, title: t }))}
             placeholder={defaultTitle}
             placeholderTextColor={colors.faint}
-            style={{
-              ...type.display,
-              color: colors.text,
-              marginTop: space(4),
-              padding: 0,
-            }}
+            style={{ ...type.display, color: colors.text, marginTop: space(4), padding: 0 }}
           />
 
           {draft.exercises.length === 0 ? (
@@ -244,10 +266,16 @@ export function LogScreen({
             <Text style={{ fontSize: 13, fontWeight: '700', color: colors.muted, marginLeft: 4 }}>kg</Text>
           </View>
           <Text style={{ ...type.tiny, color: colors.faint, marginTop: 1 }}>
-            {summary.sets} sets · {summary.reps} reps · {summary.exercises} lifts
+            {summary.sets} sets · {summary.reps} reps
+            {summary.distanceM > 0 ? ` · ${num(Math.round(summary.distanceM))} m` : ''}
           </Text>
         </View>
-        <Button label="Finish" icon="checkmark" onPress={finish} loading={saving} />
+        <Button
+          label={editId ? 'Save' : 'Finish'}
+          icon="checkmark"
+          onPress={finish}
+          loading={saving}
+        />
       </View>
 
       <ExercisePicker visible={pickerOpen} onClose={() => setPickerOpen(false)} onPick={addExercise} />
@@ -263,20 +291,28 @@ function ExerciseBlock({
   onRemoveExercise,
   onUpdateSet,
 }: {
-  block: { key: string; exerciseId: string; sets: { key: string; weight: string; reps: string }[] };
+  block: DraftExercise;
   index: number;
   onAddSet: () => void;
   onRemoveSet: (setKey: string) => void;
   onRemoveExercise: () => void;
-  onUpdateSet: (setKey: string, patch: Partial<{ weight: string; reps: string }>) => void;
+  onUpdateSet: (setKey: string, patch: Partial<DraftSet>) => void;
 }) {
   const exercise = getExercise(block.exerciseId);
+  const isDistance = exercise.measure === 'distance';
+  const hasLoad = exercise.loadFactor > 0;
 
-  const blockVolume = block.sets.reduce((sum, s) => {
-    const w = Number.parseFloat(s.weight.replace(',', '.')) || 0;
-    const r = Number.parseInt(s.reps, 10) || 0;
-    return sum + w * exercise.loadFactor * r;
-  }, 0);
+  const totals = block.sets.reduce(
+    (acc, s) => {
+      const w = Number.parseFloat(s.weight.replace(',', '.')) || 0;
+      const r = Number.parseInt(s.reps, 10) || 0;
+      const d = Number.parseFloat(s.distance.replace(',', '.')) || 0;
+      if (isDistance) acc.distance += d;
+      else acc.volume += w * exercise.loadFactor * r;
+      return acc;
+    },
+    { volume: 0, distance: 0 },
+  );
 
   return (
     <Card style={{ marginTop: space(4), padding: 0 }}>
@@ -310,9 +346,12 @@ function ExerciseBlock({
             {exercise.equipment}
             {exercise.loadFactor === 2 ? ' · weight per dumbbell' : ''}
             {exercise.isUnilateral ? ' · per side' : ''}
+            {isDistance ? ' · distance' : ''}
           </Text>
         </View>
-        <Text style={{ ...type.caption, color: colors.muted, ...tabular }}>{kgLabel(blockVolume)}</Text>
+        <Text style={{ ...type.caption, color: colors.muted, ...tabular }}>
+          {isDistance ? `${num(Math.round(totals.distance))} m` : kgLabel(totals.volume)}
+        </Text>
         <Pressable onPress={onRemoveExercise} hitSlop={10} style={{ marginLeft: space(1) }}>
           <Ionicons name="trash-outline" size={16} color={colors.faint} />
         </Pressable>
@@ -321,42 +360,91 @@ function ExerciseBlock({
       <View style={{ paddingHorizontal: space(4), paddingBottom: space(3) }}>
         <View style={{ flexDirection: 'row', gap: space(2), marginBottom: space(1.5), alignItems: 'center' }}>
           <Text style={{ ...type.tiny, color: colors.faint, width: 22 }}>SET</Text>
-          <Text style={{ ...type.tiny, color: colors.faint, flex: 1 }}>WEIGHT KG</Text>
-          <Text style={{ ...type.tiny, color: colors.faint, width: 12 }} />
-          <Text style={{ ...type.tiny, color: colors.faint, width: 56, textAlign: 'center' }}>REPS</Text>
-          <Text style={{ ...type.tiny, color: colors.faint, width: 62, textAlign: 'right' }}>TOTAL</Text>
+          {isDistance && hasLoad ? (
+            <Text style={{ ...type.tiny, color: colors.faint, flex: 1 }}>WEIGHT KG</Text>
+          ) : null}
+          {isDistance ? (
+            <Text style={{ ...type.tiny, color: colors.faint, flex: isDistance && hasLoad ? 0 : 1, width: isDistance && hasLoad ? 92 : undefined, textAlign: isDistance && hasLoad ? 'center' : 'left' }}>
+              DISTANCE M
+            </Text>
+          ) : (
+            <>
+              <Text style={{ ...type.tiny, color: colors.faint, flex: 1 }}>WEIGHT KG</Text>
+              <Text style={{ ...type.tiny, color: colors.faint, width: 12 }} />
+              <Text style={{ ...type.tiny, color: colors.faint, width: 56, textAlign: 'center' }}>REPS</Text>
+            </>
+          )}
+          <Text style={{ ...type.tiny, color: colors.faint, width: 62, textAlign: 'right' }}>
+            {isDistance ? (hasLoad ? 'LOAD·M' : '') : 'TOTAL'}
+          </Text>
           <View style={{ width: 15 }} />
         </View>
 
         {block.sets.map((set, i) => {
           const w = Number.parseFloat(set.weight.replace(',', '.')) || 0;
           const r = Number.parseInt(set.reps, 10) || 0;
+          const d = Number.parseFloat(set.distance.replace(',', '.')) || 0;
+          const setVolume = w * exercise.loadFactor * r;
+          const setLoadDistance = w * exercise.loadFactor * d;
+
           return (
             <View
               key={set.key}
               style={{ flexDirection: 'row', alignItems: 'center', gap: space(2), marginTop: space(2) }}
             >
               <Text style={{ ...type.caption, color: colors.muted, width: 22, ...tabular }}>{i + 1}</Text>
-              <TextInput
-                value={set.weight}
-                onChangeText={(t) => onUpdateSet(set.key, { weight: t })}
-                keyboardType="decimal-pad"
-                selectTextOnFocus
-                style={[inputStyle, { flex: 1 }]}
-              />
-              <Text style={{ color: colors.faint, fontSize: 12, width: 12, textAlign: 'center' }}>×</Text>
-              <TextInput
-                value={set.reps}
-                onChangeText={(t) => onUpdateSet(set.key, { reps: t })}
-                keyboardType="number-pad"
-                selectTextOnFocus
-                style={[inputStyle, { width: 56 }]}
-              />
-              <Text style={{ ...type.tiny, color: colors.faint, width: 62, textAlign: 'right', ...tabular }}>
-                {w * exercise.loadFactor * r >= 1000
-                  ? `${((w * exercise.loadFactor * r) / 1000).toFixed(1)}k`
-                  : Math.round(w * exercise.loadFactor * r)}
-              </Text>
+
+              {isDistance ? (
+                <>
+                  {hasLoad ? (
+                    <TextInput
+                      value={set.weight}
+                      onChangeText={(t) => onUpdateSet(set.key, { weight: t })}
+                      keyboardType="decimal-pad"
+                      selectTextOnFocus
+                      style={[inputStyle, { flex: 1 }]}
+                    />
+                  ) : null}
+                  <TextInput
+                    value={set.distance}
+                    onChangeText={(t) => onUpdateSet(set.key, { distance: t })}
+                    keyboardType="number-pad"
+                    selectTextOnFocus
+                    style={[inputStyle, hasLoad ? { width: 92 } : { flex: 1 }]}
+                  />
+                  <Text style={{ ...type.tiny, color: colors.faint, width: 62, textAlign: 'right', ...tabular }}>
+                    {hasLoad
+                      ? setLoadDistance >= 1000
+                        ? `${(setLoadDistance / 1000).toFixed(1)}k`
+                        : Math.round(setLoadDistance)
+                      : ''}
+                  </Text>
+                </>
+              ) : (
+                <>
+                  <TextInput
+                    value={set.weight}
+                    onChangeText={(t) => onUpdateSet(set.key, { weight: t })}
+                    keyboardType="decimal-pad"
+                    selectTextOnFocus
+                    style={[inputStyle, { flex: 1 }]}
+                  />
+                  <Text style={{ color: colors.faint, fontSize: 12, width: 12, textAlign: 'center' }}>×</Text>
+                  <TextInput
+                    value={set.reps}
+                    onChangeText={(t) => onUpdateSet(set.key, { reps: t })}
+                    keyboardType="number-pad"
+                    selectTextOnFocus
+                    style={[inputStyle, { width: 56 }]}
+                  />
+                  <Text style={{ ...type.tiny, color: colors.faint, width: 62, textAlign: 'right', ...tabular }}>
+                    {setVolume >= 1000
+                      ? `${(setVolume / 1000).toFixed(1)}k`
+                      : Math.round(setVolume)}
+                  </Text>
+                </>
+              )}
+
               <Pressable onPress={() => onRemoveSet(set.key)} hitSlop={10} style={{ width: 15 }}>
                 <Ionicons name="close" size={15} color={colors.faint} />
               </Pressable>

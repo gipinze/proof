@@ -75,6 +75,7 @@ export function ShareScreen({
     }
 
     const summary = summarizeSets(sets);
+    const carryOnly = summary.volume === 0 && summary.distanceM > 0;
     return {
       kind: 'lift',
       athlete,
@@ -83,9 +84,14 @@ export function ShareScreen({
       stats: [
         { label: 'Time', value: durationLong(session.duration_s ?? 0) },
         { label: 'Sets', value: `${summary.sets}` },
-        { label: 'Volume', value: num(Math.round(summary.volume)), unit: 'kg' },
+        carryOnly
+          ? { label: 'Distance', value: num(Math.round(summary.distanceM)), unit: 'm' }
+          : { label: 'Volume', value: num(Math.round(summary.volume)), unit: 'kg' },
       ],
-      caption: `${summary.exercises} exercises · ${summary.reps} reps`,
+      caption:
+        summary.distanceM > 0
+          ? `${summary.exercises} exercises · ${num(Math.round(summary.distanceM))} m`
+          : `${summary.exercises} exercises · ${summary.reps} reps`,
       load: normalisedLoad(muscleLoad(sets)),
       format,
     };

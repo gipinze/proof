@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Button, Card, IconButton, Screen, SectionLabel, Stat } from '../components/ui';
 import { listSessionSummaries, statsSince, type SessionListItem } from '../db/db';
 import { getSetting, setSetting, ATHLETE_KEY } from '../db/settings';
-import { duration, km, kgLabel, relativeDay, volumeParts } from '../lib/format';
+import { duration, km, num, relativeDay, volumeParts } from '../lib/format';
 import type { Nav } from '../nav';
 import { colors, radius, space, tabular, type } from '../theme';
 
@@ -198,10 +198,18 @@ export function HomeScreen({
               </View>
               <View style={{ alignItems: 'flex-end' }}>
                 <Text style={{ fontSize: 15, fontWeight: '800', color: colors.text, ...tabular }}>
-                  {s.kind === 'run' ? km(s.distance_m ?? 0) : volumeParts(s.volume).value}
+                  {s.kind === 'run'
+                    ? km(s.distance_m ?? 0)
+                    : s.volume > 0
+                      ? volumeParts(s.volume).value
+                      : num(Math.round(s.distanceM))}
                 </Text>
                 <Text style={{ ...type.tiny, color: colors.faint }}>
-                  {s.kind === 'run' ? 'KM' : volumeParts(s.volume).unit.toUpperCase()}
+                  {s.kind === 'run'
+                    ? 'KM'
+                    : s.volume > 0
+                      ? volumeParts(s.volume).unit.toUpperCase()
+                      : 'M'}
                 </Text>
               </View>
             </Pressable>

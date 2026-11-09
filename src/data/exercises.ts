@@ -18,7 +18,9 @@ export type Category =
   | 'Legs'
   | 'Core'
   | 'Olympic'
-  | 'Full body';
+  | 'Full body'
+  | 'Carries'
+  | 'Cardio';
 
 export const CATEGORIES: Category[] = [
   'Chest',
@@ -29,10 +31,19 @@ export const CATEGORIES: Category[] = [
   'Core',
   'Olympic',
   'Full body',
+  'Carries',
+  'Cardio',
 ];
 
 /** 3 = primary mover, 2 = secondary, 1 = stabiliser. */
 export type MuscleWeights = Partial<Record<MuscleId, 3 | 2 | 1>>;
+
+/**
+ * How a set of this movement is counted.
+ * - `reps`     weight × reps (the usual)
+ * - `distance` weight × metres — carries, sleds, machines, rowing, gym cardio
+ */
+export type Measure = 'reps' | 'distance';
 
 export type ExerciseDef = {
   id: string;
@@ -48,6 +59,8 @@ export type ExerciseDef = {
   /** One arm / one leg at a time — weight stays single-sided. */
   isUnilateral?: boolean;
   muscles: MuscleWeights;
+  /** Defaults to `reps`. Distance work logs metres instead of reps. */
+  measure?: Measure;
 };
 
 const ex = (
@@ -58,7 +71,27 @@ const ex = (
   loadFactor: number,
   muscles: MuscleWeights,
   isUnilateral = false,
-): ExerciseDef => ({ id, name, category, equipment, loadFactor, muscles, isUnilateral });
+): ExerciseDef => ({ id, name, category, equipment, loadFactor, muscles, isUnilateral, measure: 'reps' });
+
+/** A movement logged in metres instead of reps (carries, sleds, cardio). */
+const exDist = (
+  id: string,
+  name: string,
+  category: Category,
+  equipment: Equipment,
+  loadFactor: number,
+  muscles: MuscleWeights,
+  isUnilateral = false,
+): ExerciseDef => ({
+  id,
+  name,
+  category,
+  equipment,
+  loadFactor,
+  muscles,
+  isUnilateral,
+  measure: 'distance',
+});
 
 export const EXERCISES: ExerciseDef[] = [
   // ---------------------------------------------------------------- chest
@@ -122,7 +155,7 @@ export const EXERCISES: ExerciseDef[] = [
   ex('dips-triceps', 'Dips (upright)', 'Arms', 'bodyweight', 0, { triceps: 3, chest: 2, front_delt: 1 }),
   ex('bench-dips', 'Bench Dips', 'Arms', 'bodyweight', 0, { triceps: 3, chest: 1, front_delt: 1 }),
   ex('kickback', 'Triceps Kickback', 'Arms', 'dumbbell', 1, { triceps: 3 }, true),
-  ex('farmer-carry', "Farmer's Carry", 'Arms', 'dumbbell', 2, { forearms: 3, traps: 2, abs: 2, obliques: 1 }),
+  exDist('farmer-carry', "Farmer's Carry", 'Carries', 'dumbbell', 2, { forearms: 3, traps: 2, abs: 2, obliques: 1 }),
 
   // ----------------------------------------------------------------- legs
   ex('back-squat', 'Back Squat', 'Legs', 'barbell', 1, { quads: 3, glutes: 3, adductors: 2, lower_back: 2, abs: 1 }),
@@ -149,7 +182,7 @@ export const EXERCISES: ExerciseDef[] = [
   ex('smith-calf-raise', 'Smith Calf Raise', 'Legs', 'machine', 1, { calves: 3 }),
   ex('sissy-squat', 'Sissy Squat', 'Legs', 'bodyweight', 0, { quads: 3, abs: 1 }),
   ex('kettlebell-swing', 'Kettlebell Swing', 'Legs', 'kettlebell', 1, { glutes: 3, hamstrings: 2, lower_back: 2, abs: 1, traps: 1 }),
-  ex('sled-push', 'Sled Push', 'Legs', 'other', 1, { quads: 3, glutes: 2, calves: 2 }),
+  exDist('sled-push', 'Sled Push', 'Carries', 'other', 1, { quads: 3, glutes: 3, calves: 2, hamstrings: 1 }),
   ex('trap-bar-deadlift', 'Trap Bar Deadlift', 'Legs', 'barbell', 1, { glutes: 3, quads: 2, traps: 2, lower_back: 2, forearms: 2 }),
 
   // ----------------------------------------------------------------- core
@@ -162,7 +195,7 @@ export const EXERCISES: ExerciseDef[] = [
   ex('woodchopper', 'Cable Woodchopper', 'Core', 'cable', 1, { obliques: 3, abs: 2, front_delt: 1 }, true),
   ex('pallof-press', 'Pallof Press', 'Core', 'cable', 1, { obliques: 3, abs: 2 }, true),
   ex('dead-bug', 'Dead Bug', 'Core', 'bodyweight', 0, { abs: 3, obliques: 2 }),
-  ex('suitcase-carry', 'Suitcase Carry', 'Core', 'dumbbell', 1, { obliques: 3, abs: 2, forearms: 2, traps: 1 }, true),
+  exDist('suitcase-carry', 'Suitcase Carry', 'Carries', 'dumbbell', 1, { obliques: 3, abs: 2, forearms: 2, traps: 1 }, true),
   ex('toes-to-bar', 'Toes to Bar', 'Core', 'bodyweight', 0, { abs: 3, obliques: 2, lats: 1, forearms: 1 }),
 
   // -------------------------------------------------------------- olympic
@@ -178,6 +211,87 @@ export const EXERCISES: ExerciseDef[] = [
   ex('battle-ropes', 'Battle Ropes', 'Full body', 'other', 0, { front_delt: 2, side_delt: 2, abs: 2, forearms: 2 }),
   ex('wall-ball', 'Wall Ball', 'Full body', 'other', 1, { quads: 3, front_delt: 2, glutes: 2 }),
   ex('bear-crawl', 'Bear Crawl', 'Full body', 'bodyweight', 0, { abs: 2, front_delt: 2, quads: 2, triceps: 1 }),
+
+
+  // -------------------------------------------------------------- carries
+  exDist('overhead-carry', 'Overhead Carry (single arm)', 'Carries', 'dumbbell', 1, { front_delt: 3, side_delt: 2, traps: 2, obliques: 2, forearms: 1 }, true),
+  exDist('front-rack-carry', 'Front Rack Carry', 'Carries', 'kettlebell', 2, { front_delt: 3, abs: 2, traps: 1, quads: 1 }),
+  exDist('yoke-walk', 'Yoke Walk', 'Carries', 'other', 1, { traps: 3, quads: 2, glutes: 2, abs: 2, lower_back: 1 }),
+  exDist('sandbag-carry', 'Sandbag Carry', 'Carries', 'other', 2, { forearms: 2, abs: 2, traps: 2, quads: 2, glutes: 1 }),
+  exDist('bear-hug-carry', 'Bear Hug Carry', 'Carries', 'other', 1, { abs: 2, forearms: 2, quads: 2, chest: 2, glutes: 1 }),
+  exDist('sled-drag', 'Sled Drag', 'Carries', 'other', 1, { hamstrings: 3, glutes: 2, calves: 2, quads: 1 }),
+  exDist('sled-rope-pull', 'Sled Rope Pull', 'Carries', 'other', 1, { lats: 3, quads: 2, glutes: 2, forearms: 2 }),
+
+  // --------------------------------------------------------------- cardio
+  exDist('rower', 'Rowing Machine', 'Cardio', 'machine', 0, { quads: 3, glutes: 2, lats: 2, mid_back: 1, hamstrings: 1, biceps: 1, abs: 1 }),
+  exDist('ski-erg', 'Ski Erg', 'Cardio', 'machine', 0, { lats: 3, triceps: 2, abs: 2, obliques: 1, quads: 1 }),
+  exDist('treadmill-run', 'Treadmill Run', 'Cardio', 'machine', 0, { quads: 3, glutes: 2, hamstrings: 2, calves: 2, abs: 1 }),
+  exDist('treadmill-incline-walk', 'Incline Treadmill Walk', 'Cardio', 'machine', 0, { glutes: 3, hamstrings: 2, calves: 2, quads: 1 }),
+  exDist('stair-climber', 'Stair Climber', 'Cardio', 'machine', 0, { quads: 3, glutes: 3, calves: 2 }),
+  exDist('stationary-bike', 'Stationary Bike', 'Cardio', 'machine', 0, { quads: 3, glutes: 2, hamstrings: 1, calves: 1 }),
+  exDist('assault-bike', 'Assault Bike', 'Cardio', 'machine', 0, { quads: 2, glutes: 2, abs: 1, front_delt: 1, triceps: 1, biceps: 1 }),
+  exDist('elliptical', 'Elliptical', 'Cardio', 'machine', 0, { quads: 2, glutes: 2, hamstrings: 1, calves: 1 }),
+  ex('jump-rope', 'Jump Rope', 'Cardio', 'other', 0, { calves: 3, quads: 1, front_delt: 1 }),
+
+  // ------------------------------------------------- chest, back, shoulders
+  ex('dumbbell-pullover', 'Dumbbell Pullover', 'Chest', 'dumbbell', 2, { chest: 3, lats: 2, triceps: 1 }),
+  ex('incline-fly', 'Incline Dumbbell Fly', 'Chest', 'dumbbell', 2, { chest: 3, front_delt: 2 }),
+  ex('low-cable-fly', 'Low-to-High Cable Fly', 'Chest', 'cable', 1, { chest: 3, front_delt: 2 }),
+  ex('svend-press', 'Svend Press', 'Chest', 'other', 1, { chest: 3, front_delt: 1 }),
+  ex('landmine-chest-press', 'Landmine Chest Press', 'Chest', 'barbell', 1, { chest: 3, front_delt: 2, triceps: 1 }),
+  ex('chest-supported-row', 'Chest-Supported Row', 'Back', 'machine', 1, { mid_back: 3, lats: 2, biceps: 1, rear_delt: 1 }),
+  ex('seal-row', 'Seal Row', 'Back', 'barbell', 1, { mid_back: 3, lats: 2, biceps: 2 }),
+  ex('meadows-row', 'Meadows Row', 'Back', 'barbell', 1, { lats: 3, mid_back: 2, biceps: 1, rear_delt: 1 }, true),
+  ex('pendlay-row', 'Pendlay Row', 'Back', 'barbell', 1, { mid_back: 3, lats: 2, biceps: 1, traps: 1 }),
+  ex('kroc-row', 'Kroc Row', 'Back', 'dumbbell', 1, { lats: 3, mid_back: 2, biceps: 2, traps: 1, forearms: 1 }, true),
+  ex('single-arm-lat-pulldown', 'Single-Arm Lat Pulldown', 'Back', 'cable', 1, { lats: 3, biceps: 1, obliques: 1 }, true),
+  ex('cable-pullover', 'Cable Pullover', 'Back', 'cable', 1, { lats: 3, chest: 2, triceps: 1 }),
+  ex('machine-pullover', 'Machine Pullover', 'Back', 'machine', 1, { lats: 3, mid_back: 1, chest: 1 }),
+  ex('cable-rear-delt-fly', 'Cable Rear Delt Fly', 'Shoulders', 'cable', 1, { rear_delt: 3, mid_back: 1 }, true),
+  ex('bent-over-lateral-raise', 'Bent-Over Lateral Raise', 'Shoulders', 'dumbbell', 2, { rear_delt: 3, traps: 1, mid_back: 1 }),
+  ex('z-press', 'Z Press', 'Shoulders', 'barbell', 1, { front_delt: 3, side_delt: 2, triceps: 2, abs: 2 }),
+  ex('seated-barbell-press', 'Seated Barbell Press', 'Shoulders', 'barbell', 1, { front_delt: 3, side_delt: 2, triceps: 2 }),
+
+  // ------------------------------------------------------------------ arms
+  ex('jm-press', 'JM Press', 'Arms', 'barbell', 1, { triceps: 3, chest: 2, front_delt: 1 }),
+  ex('cable-overhead-triceps-extension', 'Cable Overhead Extension', 'Arms', 'cable', 1, { triceps: 3 }),
+  ex('reverse-grip-pushdown', 'Reverse-Grip Pushdown', 'Arms', 'cable', 1, { triceps: 3, forearms: 1 }),
+  ex('zottman-curl', 'Zottman Curl', 'Arms', 'dumbbell', 2, { biceps: 3, forearms: 2 }),
+  ex('spider-curl', 'Spider Curl', 'Arms', 'dumbbell', 2, { biceps: 3, forearms: 1 }),
+  ex('drag-curl', 'Drag Curl', 'Arms', 'barbell', 1, { biceps: 3, front_delt: 1 }),
+
+  // ------------------------------------------------------------------ legs
+  ex('belt-squat', 'Belt Squat', 'Legs', 'machine', 1, { quads: 3, glutes: 2, adductors: 1 }),
+  ex('pendulum-squat', 'Pendulum Squat', 'Legs', 'machine', 1, { quads: 3, glutes: 2 }),
+  ex('reverse-lunge', 'Reverse Lunge', 'Legs', 'dumbbell', 2, { quads: 3, glutes: 2, hamstrings: 1, adductors: 1 }, true),
+  ex('curtsy-lunge', 'Curtsy Lunge', 'Legs', 'dumbbell', 2, { glutes: 3, adductors: 2, quads: 2 }, true),
+  ex('cossack-squat', 'Cossack Squat', 'Legs', 'bodyweight', 0, { adductors: 3, quads: 2, glutes: 2 }, true),
+  ex('nordic-curl', 'Nordic Hamstring Curl', 'Legs', 'bodyweight', 0, { hamstrings: 3, glutes: 1, calves: 1 }),
+  ex('glute-ham-raise', 'Glute-Ham Raise', 'Legs', 'machine', 0, { hamstrings: 3, glutes: 2, calves: 1 }),
+  ex('single-leg-rdl', 'Single-Leg RDL', 'Legs', 'dumbbell', 1, { hamstrings: 3, glutes: 2, lower_back: 1, obliques: 1 }, true),
+  ex('b-stance-rdl', 'B-Stance RDL', 'Legs', 'dumbbell', 2, { hamstrings: 3, glutes: 2, lower_back: 1 }, true),
+  ex('cable-pull-through', 'Cable Pull-Through', 'Legs', 'cable', 1, { glutes: 3, hamstrings: 2, lower_back: 1 }),
+  ex('tibialis-raise', 'Tibialis Raise', 'Legs', 'bodyweight', 0, { calves: 3 }),
+  ex('donkey-calf-raise', 'Donkey Calf Raise', 'Legs', 'machine', 1, { calves: 3 }),
+
+  // --------------------------------------------------------------- olympic
+  ex('hang-clean', 'Hang Clean', 'Olympic', 'barbell', 1, { quads: 3, traps: 2, glutes: 2, hamstrings: 2, lower_back: 1 }),
+  ex('hang-snatch', 'Hang Snatch', 'Olympic', 'barbell', 1, { traps: 3, quads: 2, glutes: 2, hamstrings: 2, lower_back: 1 }),
+  ex('power-snatch', 'Power Snatch', 'Olympic', 'barbell', 1, { traps: 3, quads: 2, glutes: 2, hamstrings: 1 }),
+  ex('push-jerk', 'Push Jerk', 'Olympic', 'barbell', 1, { front_delt: 3, triceps: 2, quads: 2, abs: 1 }),
+  ex('split-jerk', 'Split Jerk', 'Olympic', 'barbell', 1, { front_delt: 3, triceps: 2, quads: 2, glutes: 2, abs: 1 }),
+  ex('clean-pull', 'Clean Pull', 'Olympic', 'barbell', 1, { traps: 3, hamstrings: 3, glutes: 2, lower_back: 2, quads: 1 }),
+  ex('snatch-pull', 'Snatch Pull', 'Olympic', 'barbell', 1, { traps: 3, hamstrings: 2, glutes: 2, lower_back: 2 }),
+  ex('overhead-squat', 'Overhead Squat', 'Olympic', 'barbell', 1, { quads: 3, abs: 3, glutes: 2, traps: 2, lower_back: 1 }),
+
+  // ------------------------------------------------------------------ core
+  ex('copenhagen-plank', 'Copenhagen Plank', 'Core', 'bodyweight', 0, { adductors: 3, obliques: 2, abs: 2 }, true),
+  ex('hollow-hold', 'Hollow Body Hold', 'Core', 'bodyweight', 0, { abs: 3, obliques: 2, quads: 1 }),
+  ex('l-sit', 'L-Sit', 'Core', 'bodyweight', 0, { abs: 3, quads: 2, forearms: 1 }),
+  ex('dragon-flag', 'Dragon Flag', 'Core', 'bodyweight', 0, { abs: 3, obliques: 2, lats: 1 }),
+  ex('hanging-windshield-wiper', 'Hanging Windshield Wiper', 'Core', 'bodyweight', 0, { obliques: 3, abs: 3, forearms: 1 }),
+  ex('cable-side-bend', 'Cable Side Bend', 'Core', 'cable', 1, { obliques: 3, abs: 1 }, true),
+  ex('plank-shoulder-tap', 'Plank Shoulder Tap', 'Core', 'bodyweight', 0, { abs: 3, obliques: 2, front_delt: 1 }),
 ];
 
 export const EXERCISE_BY_ID: Record<string, ExerciseDef> = Object.fromEntries(

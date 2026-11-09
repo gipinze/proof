@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Pressable, Text, useWindowDimensions, View } from 'react-native';
+import { Alert, Modal, Pressable, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AnatomyPair } from '../components/AnatomyMap';
 import { RouteMap } from '../components/RouteMap';
@@ -7,8 +7,15 @@ import { Button, Card, IconButton, Screen, SectionLabel, Stat } from '../compone
 import { getExercise } from '../data/exercises';
 import { MUSCLE_NAME } from '../data/muscles';
 import type { MuscleId } from '../data/anatomy';
-import { deleteSession, getSession, getSessionSets, type SessionRow, type StoredSet } from '../db/db';
-import { duration, fullDate, km, kgLabel, num, pace, paceFrom, timeOfDay } from '../lib/format';
+import {
+  deleteSession,
+  getSession,
+  getSessionSets,
+  renameSession,
+  type SessionRow,
+  type StoredSet,
+} from '../db/db';
+import { duration, fullDate, km, kgLabel, num, pace, paceFrom } from '../lib/format';
 import { muscleLoad, normalisedLoad, rankedMuscles, summarizeSets, type SetEntry } from '../lib/volume';
 import type { TrackPoint } from '../lib/geo';
 import type { Nav } from '../nav';
@@ -18,10 +25,13 @@ export function SessionScreen({ nav, sessionId }: { nav: Nav; sessionId: number 
   const { width: winW } = useWindowDimensions();
   const [session, setSession] = useState<SessionRow | null>(null);
   const [sets, setSets] = useState<StoredSet[]>([]);
+  const [renaming, setRenaming] = useState(false);
+  const [titleDraft, setTitleDraft] = useState('');
 
   const load = useCallback(async () => {
     const row = await getSession(sessionId);
     setSession(row);
+    if (row) setTitleDraft(row.title);
     if (row?.kind === 'lift') setSets(await getSessionSets(sessionId));
   }, [sessionId]);
 
@@ -35,6 +45,7 @@ export function SessionScreen({ nav, sessionId }: { nav: Nav; sessionId: number 
         exerciseId: s.exercise_id,
         weight: s.weight,
         reps: s.reps,
+        distanceM: s.distance_m ?? undefined,
         isWarmup: s.is_warmup === 1,
       })),
     [sets],
@@ -78,6 +89,18 @@ export function SessionScreen({ nav, sessionId }: { nav: Nav; sessionId: number 
     ]);
   };
 
+  const saveTitle = async () => {
+    const clean = titleDraft.trim();
+    if (!clean) {
+      setRenaming(false);
+      return;
+    }
+    await renameSession(sessionId, clean);
+    setSession((s) => (s ? { ...s, title: clean } : s));
+    setRenaming(false);
+    nav.bump();
+  };
+
   if (!session) {
     return (
       <Screen>
@@ -89,17 +112,36 @@ export function SessionScreen({ nav, sessionId }: { nav: Nav; sessionId: number 
   const isRun = session.kind === 'run';
   const distanceM = session.distance_m ?? 0;
   const seconds = session.duration_s ?? 0;
+  const hasDistanceWork = summary.distanceM > 0;
 
   return (
     <Screen scroll>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space(3) }}>
         <IconButton icon="chevron-back" onPress={nav.back} size={34} bg={colors.surface} />
         <Text style={{ ...type.caption, color: colors.muted, flex: 1 }}>{fullDate(session.started_at)}</Text>
-        <IconButton icon="share-outline" onPress={() => nav.push({ name: 'share', id: sessionId })} size={34} bg={colors.surface} />
+        {!isRun ? (
+          <IconButton
+            icon="create-outline"
+            onPress={() => nav.editSession(sessionId)}
+            size={34}
+            bg={colors.surface}
+          />
+        ) : null}
+        <IconButton
+          icon="share-outline"
+          onPress={() => nav.push({ name: 'share', id: sessionId })}
+          size={34}
+          bg={colors.surface}
+        />
         <IconButton icon="trash-outline" onPress={remove} size={34} bg={colors.surface} />
       </View>
 
-      <Text style={{ ...type.display, color: colors.text, marginTop: space(5) }}>{session.title}</Text>
+      <Pressable onPress={() => setRenaming(true)} style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+        <Text style={{ ...type.display, color: colors.text, marginTop: space(5), flex: 1 }}>
+          {session.title}
+        </Text>
+        <Ionicons name="pencil" size={16} color={colors.faint} style={{ marginTop: space(6) }} />
+      </Pressable>
 
       {isRun ? (
         <>
@@ -122,10 +164,42 @@ export function SessionScreen({ nav, sessionId }: { nav: Nav; sessionId: number 
       ) : (
         <>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: space(5) }}>
-            <Stat label="Volume" value={num(Math.round(summary.volume))} unit="kg" size="lg" />
+            <Stat
+              label={summary.volume > 0 ? 'Volume' : 'Carried'}
+              value={
+                summary.volume > 0
+                  ? num(Math.round(summary.volume))
+                  : num(Math.round(summary.loadDistance))
+              }
+              unit={summary.volume > 0 ? 'kg' : 'kg·m'}
+              size="lg"
+            />
             <Stat label="Sets" value={`${summary.sets}`} size="lg" />
             <Stat label="Time" value={duration(seconds)} size="lg" />
           </View>
+
+          {hasDistanceWork ? (
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: space(2),
+                marginTop: space(3),
+                backgroundColor: colors.surfaceAlt,
+                borderRadius: radius.md,
+                paddingHorizontal: space(3.5),
+                paddingVertical: space(2.5),
+              }}
+            >
+              <Ionicons name="walk-outline" size={15} color={colors.accentText} />
+              <Text style={{ ...type.caption, color: colors.muted, flex: 1 }}>
+                {num(Math.round(summary.distanceM))} m covered
+                {summary.loadDistance > 0
+                  ? ` · ${num(Math.round(summary.loadDistance))} kg·m carried`
+                  : ''}
+              </Text>
+            </View>
+          ) : null}
 
           <Card style={{ marginTop: space(5), alignItems: 'center', paddingVertical: space(4) }}>
             <AnatomyPair load={load01} height={300} gap={10} maxWidth={winW - 64} />
@@ -142,7 +216,12 @@ export function SessionScreen({ nav, sessionId }: { nav: Nav; sessionId: number 
           <SectionLabel
             right={
               <Text style={{ ...type.caption, color: colors.muted }}>
-                {summary.reps} reps · {summary.exercises} exercises
+                {summary.reps > 0
+                  ? `${summary.reps} reps · `
+                  : summary.distanceM > 0
+                    ? `${num(Math.round(summary.distanceM))} m · `
+                    : ''}
+                {summary.exercises} exercises
               </Text>
             }
           >
@@ -152,19 +231,20 @@ export function SessionScreen({ nav, sessionId }: { nav: Nav; sessionId: number 
           <View style={{ gap: space(2) }}>
             {groups.map(([exerciseId, list]) => {
               const exercise = getExercise(exerciseId);
-              const volume = list.reduce(
-                (sum, s) => sum + s.weight * exercise.loadFactor * s.reps,
-                0,
-              );
+              const isDistance = exercise.measure === 'distance';
+              const volume = list.reduce((sum, s) => sum + s.weight * exercise.loadFactor * s.reps, 0);
+              const distance = list.reduce((sum, s) => sum + (s.distance_m ?? 0), 0);
               return (
                 <Card key={exerciseId} style={{ padding: space(3.5) }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                     <Text style={{ ...type.body, color: colors.text, flex: 1 }}>{exercise.name}</Text>
                     <Text style={{ ...type.caption, color: colors.muted, ...tabular }}>
-                      {kgLabel(volume)}
+                      {isDistance ? `${num(Math.round(distance))} m` : kgLabel(volume)}
                     </Text>
                   </View>
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space(1.5), marginTop: space(2) }}>
+                  <View
+                    style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space(1.5), marginTop: space(2) }}
+                  >
                     {list.map((s, i) => (
                       <View
                         key={s.id}
@@ -176,7 +256,11 @@ export function SessionScreen({ nav, sessionId }: { nav: Nav; sessionId: number 
                         }}
                       >
                         <Text style={{ fontSize: 11.5, color: colors.text, fontWeight: '700', ...tabular }}>
-                          {i + 1}. {s.weight}×{s.reps}
+                          {isDistance
+                            ? s.weight > 0
+                              ? `${i + 1}. ${s.weight}kg × ${s.distance_m ?? 0}m`
+                              : `${i + 1}. ${s.distance_m ?? 0}m`
+                            : `${i + 1}. ${s.weight}×${s.reps}`}
                         </Text>
                       </View>
                     ))}
@@ -189,18 +273,61 @@ export function SessionScreen({ nav, sessionId }: { nav: Nav; sessionId: number 
       )}
 
       <View style={{ flexDirection: 'row', gap: space(3), marginTop: space(7) }}>
+        {!isRun ? (
+          <Button
+            label="Edit sets"
+            icon="create-outline"
+            variant="surface"
+            onPress={() => nav.editSession(sessionId)}
+            style={{ flex: 1 }}
+          />
+        ) : null}
         <Button
           label="Create a card"
           icon="share-social"
           onPress={() => nav.push({ name: 'share', id: sessionId })}
           style={{ flex: 1 }}
         />
-        <Button label="Done" variant="ghost" onPress={nav.back} style={{ flex: 1 }} />
       </View>
 
-      <Pressable onPress={() => nav.reset({ name: 'home' })} style={{ marginTop: space(5), alignSelf: 'center' }}>
-        <Text style={{ ...type.caption, color: colors.faint }}>Back to home</Text>
+      <Pressable onPress={() => nav.back()} style={{ marginTop: space(4), alignSelf: 'center' }}>
+        <Text style={{ ...type.caption, color: colors.faint }}>Back</Text>
       </Pressable>
+
+      <Modal visible={renaming} transparent animationType="fade" onRequestClose={() => setRenaming(false)}>
+        <Pressable
+          style={{ flex: 1, backgroundColor: '#000000AA', justifyContent: 'center', padding: space(6) }}
+          onPress={() => setRenaming(false)}
+        >
+          <Pressable style={{ backgroundColor: colors.surface, borderRadius: radius.lg, padding: space(5) }}>
+            <Text style={{ ...type.title, color: colors.text }}>Name this session</Text>
+            <Text style={{ ...type.caption, color: colors.muted, marginTop: 4 }}>
+              Shown on the card, before or after you finish.
+            </Text>
+            <TextInput
+              value={titleDraft}
+              onChangeText={setTitleDraft}
+              autoFocus
+              placeholder="Afternoon Weight Training"
+              placeholderTextColor={colors.faint}
+              style={{
+                marginTop: space(4),
+                backgroundColor: colors.surfaceAlt,
+                borderRadius: radius.md,
+                paddingHorizontal: space(4),
+                paddingVertical: 13,
+                color: colors.text,
+                fontSize: 16,
+                fontWeight: '600',
+              }}
+            />
+            <View style={{ flexDirection: 'row', gap: space(3), marginTop: space(4) }}>
+              <Button label="Cancel" variant="ghost" onPress={() => setRenaming(false)} style={{ flex: 1 }} />
+              <Button label="Save" onPress={saveTitle} style={{ flex: 1 }} />
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </Screen>
   );
 }

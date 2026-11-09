@@ -8,7 +8,7 @@ import { RunScreen } from './src/screens/RunScreen';
 import { LibraryScreen } from './src/screens/LibraryScreen';
 import { SessionScreen } from './src/screens/SessionScreen';
 import { ShareScreen } from './src/screens/ShareScreen';
-import { getDb } from './src/db/db';
+import { getDb, getSession, getSessionSets } from './src/db/db';
 import { ATHLETE_KEY, getSetting } from './src/db/settings';
 import type { ExerciseDef } from './src/data/exercises';
 import { emptyDraft, newKey, type LiftDraft, type Nav, type Route } from './src/nav';
@@ -36,11 +36,44 @@ export default function App() {
 
   const bump = useCallback(() => setDataVersion((v) => v + 1), []);
 
+  /** Load a saved lift into the logger so a finished session can be corrected. */
+  const editSession = useCallback(
+    async (id: number) => {
+      const session = await getSession(id);
+      if (!session || session.kind !== 'lift') return;
+
+      const sets = await getSessionSets(id);
+      const exercises: LiftDraft['exercises'] = [];
+      for (const set of sets) {
+        const last = exercises[exercises.length - 1];
+        const draftSet = {
+          key: newKey(),
+          weight: String(set.weight),
+          reps: String(set.reps || 8),
+          distance: String(set.distance_m ?? 0),
+        };
+        if (last && last.exerciseId === set.exercise_id) last.sets.push(draftSet);
+        else exercises.push({ key: newKey(), exerciseId: set.exercise_id, sets: [draftSet] });
+      }
+
+      setDraft({
+        startedAt: session.started_at,
+        title: session.title,
+        exercises,
+      });
+      setStack((s) => [...s, { name: 'log', editId: id }]);
+    },
+    [],
+  );
+
   const nav: Nav = {
     push: (route) => setStack((s) => [...s, route]),
     back: () => setStack((s) => (s.length > 1 ? s.slice(0, -1) : s)),
     reset: (route) =>
       setStack((s) => (route.name === 'home' ? [{ name: 'home' }] : [...s.slice(0, 1), route])),
+    editSession: (id) => {
+      editSession(id).catch(() => {});
+    },
     bump,
     dataVersion,
   };
@@ -50,6 +83,7 @@ export default function App() {
     current.name === 'home' || current.name === 'run' || current.name === 'library' ? current.name : null;
 
   const logExercise = (exercise: ExerciseDef) => {
+    const isDistance = exercise.measure === 'distance';
     setDraft((d) => ({
       ...d,
       exercises: [
@@ -57,7 +91,14 @@ export default function App() {
         {
           key: newKey(),
           exerciseId: exercise.id,
-          sets: [{ key: newKey(), weight: '', reps: '8' }],
+          sets: [
+            {
+              key: newKey(),
+              weight: String(exercise.loadFactor === 0 ? 0 : 20),
+              reps: '8',
+              distance: isDistance ? '20' : '0',
+            },
+          ],
         },
       ],
     }));
@@ -79,7 +120,9 @@ export default function App() {
         {current.name === 'home' ? (
           <HomeScreen nav={nav} athlete={athlete} onAthleteChange={setAthlete} />
         ) : null}
-        {current.name === 'log' ? <LogScreen nav={nav} draft={draft} setDraft={setDraft} /> : null}
+        {current.name === 'log' ? (
+          <LogScreen nav={nav} draft={draft} setDraft={setDraft} editId={current.editId} />
+        ) : null}
         {current.name === 'run' ? <RunScreen nav={nav} /> : null}
         {current.name === 'library' ? <LibraryScreen onLog={logExercise} /> : null}
         {current.name === 'session' ? <SessionScreen nav={nav} sessionId={current.id} /> : null}

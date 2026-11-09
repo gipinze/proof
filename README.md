@@ -9,7 +9,7 @@ The point: you don't need Strava Premium, or any subscription, to post a
 correct-looking training card with a route on it.
 
 ```
-android\app\build\outputs\apk\release\app-release.apk   (or dist\proof-0.1.0.apk)
+dist\proof-0.2.0.apk
 ```
 
 | Run card (story, 1080×1920) | Lift card (feed, 1080×1350) |
@@ -21,7 +21,7 @@ android\app\build\outputs\apk\release\app-release.apk   (or dist\proof-0.1.0.apk
 | ![Home](docs/screen-home.png) | ![Session](docs/screen-session-lift.png) | ![Library](docs/screen-library.png) |
 ---
 
-## What v0.1 does
+## What v0.2 does
 
 | Screen | What it does |
 | --- | --- |
@@ -45,6 +45,13 @@ factor is what most apps quietly get wrong:
 - barbell / machine / cable / kettlebell → ×1
 - dumbbell exercises → ×2, because you type the weight of **one** dumbbell
 - bodyweight → ×0 (still counts as sets and muscle work, adds no tonnage)
+
+**1b. Distance work.** Carries, sleds and machine cardio are logged in **metres**
+instead of reps (weight is optional: a farmer's carry has both, a rowing machine
+has only distance). Those sets contribute **kg·m** — `weight × load factor ×
+metres` — which is shown as *Carried* instead of *Volume*, so "40 kg × 20 m" is
+1,600 kg·m and a 2,000 m row is 2,000 m with no tonnage. Mixing the two in one
+session is fine; the summary reports both.
 
 **2. Muscle map.** `Σ hard sets per muscle`, weighted by role — primary 3 → 1.0,
 secondary 2 → 0.55, stabiliser 1 → 0.28 — then normalised to the hardest-hit
@@ -106,15 +113,15 @@ outshines the bench press you actually came to do.
 
 <https://github.com/gipinze/proof/releases/latest>
 
-Tap the `proof-0.1.0.apk` asset, then allow "install unknown apps" for your
+Tap the `proof-0.2.0.apk` asset, then allow "install unknown apps" for your
 browser when Android asks. Requires Android 7+ (`minSdkVersion 24`); the APK has
 `arm64-v8a` and `x86_64` binaries.
 
 Other routes:
 
 ```powershell
-adb install -r dist\proof-0.1.0.apk     # phone plugged in, USB debugging on
-npm run apk                             # rebuild dist\proof-0.1.0.apk yourself
+adb install -r dist\proof-0.2.0.apk     # phone plugged in, USB debugging on
+npm run apk                             # rebuild the release APK yourself
 ```
 
 The APK is signed with the standard Android debug keystore — fine for
@@ -199,7 +206,7 @@ src/
     anatomy.ts            muscle id ↔ drawn-body-part mapping + intensity maths
     body/                 vendored anatomical SVG paths (MIT, see body/LICENSE)
     muscles.ts            18 muscle groups, display names
-    exercises.ts          100+ exercises: category, equipment, load factor, muscle roles
+    exercises.ts          168 exercises: category, equipment, load factor, muscle roles, measure
   components/
     AnatomyMap.tsx        renders the body views with the heat ramp
     RouteMap.tsx          tile-free route art
@@ -233,7 +240,27 @@ settings(key, value)
 
 ---
 
-## Deliberate v0.1 limits
+### Your data survives updates
+
+The database carries a `user_version` and upgrades in place (`src/db/db.ts`):
+v0.2 adds the `sets.distance_m` column to an existing v0.1 database without
+touching a row. Verified by installing 0.2.0 over 0.1.0 with live data — the
+sessions, sets and weekly totals came through intact.
+
+Rules of thumb:
+
+- Install updates **over** the old app (`adb install -r`, or tap the new APK) —
+  never uninstall first.
+- Android only allows an in-place update when the signing key matches. Every
+  build so far uses the standard debug keystore on this machine, so rebuilds
+  here are fine. Build on another machine or with EAS and you get a *different*
+  key — Android will refuse the update and the only way in is an uninstall,
+  which wipes the data. Generate a dedicated keystore before that day comes.
+- Adding a schema change later: bump `SCHEMA_VERSION` and add a `from < N` case.
+
+---
+
+## Deliberate v0.2 limits
 
 - **Foreground GPS only.** Keep the app open while running; screen can stay on
   (keep-awake is enabled on the Run tab). Background tracking needs a foreground

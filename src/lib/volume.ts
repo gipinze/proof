@@ -6,27 +6,46 @@ export type SetEntry = {
   exerciseId: string;
   weight: number;
   reps: number;
+  /** Metres, for distance-measured work (carries, sleds, machine cardio). */
+  distanceM?: number;
   isWarmup?: boolean;
 };
 
 export type SessionSummary = {
   volume: number;
+  /** Total metres covered by distance-measured sets. */
+  distanceM: number;
+  /** kg·m — how much load was actually moved over that distance. */
+  loadDistance: number;
   sets: number;
   reps: number;
   exercises: number;
-  topSets: { exercise: ExerciseDef; volume: number; sets: number }[];
+  topSets: { exercise: ExerciseDef; volume: number; sets: number; distanceM: number }[];
 };
 
-/** Total external load moved by one set: weight x load factor x reps. */
+export function isDistance(exercise?: ExerciseDef): boolean {
+  return (exercise ?? { measure: 'reps' }).measure === 'distance';
+}
+
+/** Total external load moved by one set. Distance sets contribute kg·m instead. */
 export function setVolume(set: SetEntry, exercise?: ExerciseDef): number {
   const def = exercise ?? getExercise(set.exerciseId);
   if (set.isWarmup) return 0;
+  if (def.measure === 'distance') return 0;
   return Math.max(0, set.weight) * def.loadFactor * Math.max(0, set.reps);
 }
 
+export function setLoadDistance(set: SetEntry, exercise?: ExerciseDef): number {
+  const def = exercise ?? getExercise(set.exerciseId);
+  if (set.isWarmup || def.measure !== 'distance') return 0;
+  return Math.max(0, set.weight) * def.loadFactor * Math.max(0, set.distanceM ?? 0);
+}
+
 export function summarizeSets(sets: SetEntry[]): SessionSummary {
-  const byExercise = new Map<string, { volume: number; sets: number }>();
+  const byExercise = new Map<string, { volume: number; sets: number; distanceM: number }>();
   let volume = 0;
+  let distanceM = 0;
+  let loadDistance = 0;
   let reps = 0;
   let workingSets = 0;
 
@@ -34,20 +53,27 @@ export function summarizeSets(sets: SetEntry[]): SessionSummary {
     if (set.isWarmup) continue;
     const def = getExercise(set.exerciseId);
     const v = setVolume(set, def);
+    const ld = setLoadDistance(set, def);
+    const d = def.measure === 'distance' ? Math.max(0, set.distanceM ?? 0) : 0;
+
     volume += v;
-    reps += set.reps;
+    loadDistance += ld;
+    distanceM += d;
+    reps += def.measure === 'distance' ? 0 : set.reps;
     workingSets += 1;
-    const cur = byExercise.get(set.exerciseId) ?? { volume: 0, sets: 0 };
+
+    const cur = byExercise.get(set.exerciseId) ?? { volume: 0, sets: 0, distanceM: 0 };
     cur.volume += v;
+    cur.distanceM += d;
     cur.sets += 1;
     byExercise.set(set.exerciseId, cur);
   }
 
   const topSets = [...byExercise.entries()]
-    .map(([id, v]) => ({ exercise: getExercise(id), volume: v.volume, sets: v.sets }))
-    .sort((a, b) => b.volume - a.volume);
+    .map(([id, v]) => ({ exercise: getExercise(id), volume: v.volume, sets: v.sets, distanceM: v.distanceM }))
+    .sort((a, b) => b.volume - a.volume || b.distanceM - a.distanceM);
 
-  return { volume, sets: workingSets, reps, exercises: topSets.length, topSets };
+  return { volume, distanceM, loadDistance, sets: workingSets, reps, exercises: topSets.length, topSets };
 }
 
 const ROLE_WEIGHT: Record<number, number> = { 3: 1, 2: 0.45, 1: 0.16 };
@@ -78,9 +104,6 @@ export function normalisedLoad(load: MuscleLoad): Record<string, number> {
   const out: Record<string, number> = {};
   for (const [muscle, value] of Object.entries(load)) {
     if (typeof value !== 'number' || value <= 0) continue;
-    // ^0.9 keeps secondary work visible, but the strong curve applied when the
-    // colour is picked keeps a token stabiliser set from glowing like the
-    // primary movement.
     out[muscle] = Math.min(1, Math.pow(value / max, 0.9));
   }
   return out;
