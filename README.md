@@ -102,16 +102,26 @@ outshines the bench press you actually came to do.
 
 ## Install on a phone
 
+**Easiest — download the APK on the phone:**
+
+<https://github.com/gipinze/proof/releases/latest>
+
+Tap the `proof-0.1.0.apk` asset, then allow "install unknown apps" for your
+browser when Android asks. Requires Android 7+ (`minSdkVersion 24`); the APK has
+`arm64-v8a` and `x86_64` binaries.
+
+Other routes:
+
 ```powershell
-adb install -r dist\proof-0.1.0.apk
+adb install -r dist\proof-0.1.0.apk     # phone plugged in, USB debugging on
+npm run apk                             # rebuild dist\proof-0.1.0.apk yourself
 ```
 
-Or copy the APK to the phone and open it (allow "install unknown apps" for your
-file manager). The APK is signed with the standard debug keystore — fine for
-personal sideloading, not for Play Store distribution.
+The APK is signed with the standard Android debug keystore — fine for
+sideloading, not for Play Store distribution (that needs your own upload key).
 
-Permissions: **location** (route recording) and **photo library** (saving cards).
-Nothing else.
+Permissions: **location** (route recording) and **photos** (saving cards).
+Nothing else — see the permission table further down.
 
 ---
 
