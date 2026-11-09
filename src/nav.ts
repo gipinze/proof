@@ -1,4 +1,5 @@
 import type { SetEntry } from './lib/volume';
+import { parseTime } from './lib/format';
 
 export type Route =
   | { name: 'home' }
@@ -25,6 +26,8 @@ export type DraftSet = {
   reps: string;
   /** Metres, only used by distance-measured exercises. */
   distance: string;
+  /** `1:45` or `105` — optional time for a distance set. */
+  time: string;
 };
 
 export type DraftExercise = { key: string; exerciseId: string; sets: DraftSet[] };
@@ -49,7 +52,13 @@ export function draftToSets(draft: LiftDraft): SetEntry[] {
       const reps = Number.parseInt(set.reps, 10) || 0;
       const distance = Number.parseFloat(set.distance.replace(',', '.')) || 0;
       if (reps <= 0 && distance <= 0) continue;
-      out.push({ exerciseId: block.exerciseId, weight, reps, distanceM: distance || undefined });
+      out.push({
+        exerciseId: block.exerciseId,
+        weight,
+        reps,
+        distanceM: distance || undefined,
+        durationS: parseTime(set.time) || undefined,
+      });
     }
   }
   return out;

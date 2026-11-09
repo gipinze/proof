@@ -5,7 +5,7 @@ import { Button, Card, IconButton, Screen } from '../components/ui';
 import { ExercisePicker } from '../components/ExercisePicker';
 import { getExercise, type ExerciseDef } from '../data/exercises';
 import { lastDistanceFor, lastWeightFor, saveLift, updateLift } from '../db/db';
-import { duration, kgLabel, num, timeOfDay } from '../lib/format';
+import { duration, kgLabel, num, parseTime, timeOfDay } from '../lib/format';
 import { summarizeSets, type SetEntry } from '../lib/volume';
 import { draftToSets, newKey, type DraftExercise, type DraftSet, type LiftDraft, type Nav } from '../nav';
 import { colors, radius, space, tabular, type } from '../theme';
@@ -63,6 +63,7 @@ export function LogScreen({
                 weight: String(isDistance && exercise.loadFactor === 0 ? 0 : suggestedWeight),
                 reps: '8',
                 distance: String(prevDistance ?? (isDistance ? 20 : 0)),
+                time: '',
               },
             ],
           },
@@ -98,6 +99,7 @@ export function LogScreen({
               weight: last?.weight ?? '0',
               reps: last?.reps ?? '8',
               distance: last?.distance ?? '20',
+              time: last?.time ?? '',
             },
           ],
         };
@@ -126,7 +128,8 @@ export function LogScreen({
     setSaving(true);
     try {
       if (editId) {
-        await updateLift(editId, { title, sets, endedAt: Date.now() });
+        // keep the original finish time: correcting a typo should not add minutes
+        await updateLift(editId, { title, sets });
         setDraft({ startedAt: Date.now(), title: '', exercises: [] });
         nav.bump();
         nav.reset({ name: 'session', id: editId });
@@ -307,11 +310,15 @@ function ExerciseBlock({
       const w = Number.parseFloat(s.weight.replace(',', '.')) || 0;
       const r = Number.parseInt(s.reps, 10) || 0;
       const d = Number.parseFloat(s.distance.replace(',', '.')) || 0;
-      if (isDistance) acc.distance += d;
-      else acc.volume += w * exercise.loadFactor * r;
+      if (isDistance) {
+        acc.distance += d;
+        acc.seconds += parseTime(s.time);
+      } else {
+        acc.volume += w * exercise.loadFactor * r;
+      }
       return acc;
     },
-    { volume: 0, distance: 0 },
+    { volume: 0, distance: 0, seconds: 0 },
   );
 
   return (
@@ -350,7 +357,9 @@ function ExerciseBlock({
           </Text>
         </View>
         <Text style={{ ...type.caption, color: colors.muted, ...tabular }}>
-          {isDistance ? `${num(Math.round(totals.distance))} m` : kgLabel(totals.volume)}
+          {isDistance
+            ? `${num(Math.round(totals.distance))} m${totals.seconds > 0 ? ` · ${duration(totals.seconds)}` : ''}`
+            : kgLabel(totals.volume)}
         </Text>
         <Pressable onPress={onRemoveExercise} hitSlop={10} style={{ marginLeft: space(1) }}>
           <Ionicons name="trash-outline" size={16} color={colors.faint} />
@@ -364,9 +373,20 @@ function ExerciseBlock({
             <Text style={{ ...type.tiny, color: colors.faint, flex: 1 }}>WEIGHT KG</Text>
           ) : null}
           {isDistance ? (
-            <Text style={{ ...type.tiny, color: colors.faint, flex: isDistance && hasLoad ? 0 : 1, width: isDistance && hasLoad ? 92 : undefined, textAlign: isDistance && hasLoad ? 'center' : 'left' }}>
-              DISTANCE M
-            </Text>
+            <>
+              <Text
+                style={{
+                  ...type.tiny,
+                  color: colors.faint,
+                  flex: hasLoad ? 0 : 1,
+                  width: hasLoad ? 88 : undefined,
+                  textAlign: hasLoad ? 'center' : 'left',
+                }}
+              >
+                DIST M
+              </Text>
+              <Text style={{ ...type.tiny, color: colors.faint, width: 62, textAlign: 'center' }}>TIME</Text>
+            </>
           ) : (
             <>
               <Text style={{ ...type.tiny, color: colors.faint, flex: 1 }}>WEIGHT KG</Text>
@@ -374,7 +394,7 @@ function ExerciseBlock({
               <Text style={{ ...type.tiny, color: colors.faint, width: 56, textAlign: 'center' }}>REPS</Text>
             </>
           )}
-          <Text style={{ ...type.tiny, color: colors.faint, width: 62, textAlign: 'right' }}>
+          <Text style={{ ...type.tiny, color: colors.faint, width: 56, textAlign: 'right' }}>
             {isDistance ? (hasLoad ? 'LOAD·M' : '') : 'TOTAL'}
           </Text>
           <View style={{ width: 15 }} />
@@ -410,9 +430,18 @@ function ExerciseBlock({
                     onChangeText={(t) => onUpdateSet(set.key, { distance: t })}
                     keyboardType="number-pad"
                     selectTextOnFocus
-                    style={[inputStyle, hasLoad ? { width: 92 } : { flex: 1 }]}
+                    style={[inputStyle, hasLoad ? { width: 88 } : { flex: 1 }]}
                   />
-                  <Text style={{ ...type.tiny, color: colors.faint, width: 62, textAlign: 'right', ...tabular }}>
+                  <TextInput
+                    value={set.time}
+                    onChangeText={(t) => onUpdateSet(set.key, { time: t })}
+                    placeholder="0:00"
+                    placeholderTextColor={colors.faint}
+                    keyboardType="numbers-and-punctuation"
+                    selectTextOnFocus
+                    style={[inputStyle, { width: 62 }]}
+                  />
+                  <Text style={{ ...type.tiny, color: colors.faint, width: 56, textAlign: 'right', ...tabular }}>
                     {hasLoad
                       ? setLoadDistance >= 1000
                         ? `${(setLoadDistance / 1000).toFixed(1)}k`

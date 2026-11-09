@@ -99,3 +99,21 @@ export function relativeDay(ms: number): string {
 export function weekdayShort(ms: number): string {
   return ['S', 'M', 'T', 'W', 'T', 'F', 'S'][new Date(ms).getDay()];
 }
+
+/**
+ * Reads a duration the user typed: `105` (seconds), `1:45` (m:ss) or
+ * `1:02:30` (h:mm:ss). Returns 0 when it is not a duration.
+ */
+export function parseTime(value: string): number {
+  const raw = value.trim().replace(',', '.');
+  if (!raw) return 0;
+  if (!raw.includes(':')) {
+    const seconds = Number.parseFloat(raw);
+    return Number.isFinite(seconds) && seconds > 0 ? Math.round(seconds) : 0;
+  }
+  const parts = raw.split(':').map((p) => Number.parseInt(p, 10));
+  if (parts.some((p) => !Number.isFinite(p) || p < 0)) return 0;
+  const [h, m, s] = parts.length === 3 ? parts : [0, parts[0], parts[1]];
+  if (parts.length > 3) return 0;
+  return h * 3600 + m * 60 + s;
+}

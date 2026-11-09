@@ -8,6 +8,8 @@ export type SetEntry = {
   reps: number;
   /** Metres, for distance-measured work (carries, sleds, machine cardio). */
   distanceM?: number;
+  /** Seconds spent on a distance set — lets intervals carry a pace. */
+  durationS?: number;
   isWarmup?: boolean;
 };
 
@@ -17,6 +19,8 @@ export type SessionSummary = {
   distanceM: number;
   /** kg·m — how much load was actually moved over that distance. */
   loadDistance: number;
+  /** Seconds spent across distance sets (0 when nobody timed them). */
+  distanceTimeS: number;
   sets: number;
   reps: number;
   exercises: number;
@@ -46,6 +50,7 @@ export function summarizeSets(sets: SetEntry[]): SessionSummary {
   let volume = 0;
   let distanceM = 0;
   let loadDistance = 0;
+  let distanceTimeS = 0;
   let reps = 0;
   let workingSets = 0;
 
@@ -59,6 +64,7 @@ export function summarizeSets(sets: SetEntry[]): SessionSummary {
     volume += v;
     loadDistance += ld;
     distanceM += d;
+    if (def.measure === 'distance') distanceTimeS += Math.max(0, set.durationS ?? 0);
     reps += def.measure === 'distance' ? 0 : set.reps;
     workingSets += 1;
 
@@ -73,7 +79,16 @@ export function summarizeSets(sets: SetEntry[]): SessionSummary {
     .map(([id, v]) => ({ exercise: getExercise(id), volume: v.volume, sets: v.sets, distanceM: v.distanceM }))
     .sort((a, b) => b.volume - a.volume || b.distanceM - a.distanceM);
 
-  return { volume, distanceM, loadDistance, sets: workingSets, reps, exercises: topSets.length, topSets };
+  return {
+    volume,
+    distanceM,
+    loadDistance,
+    distanceTimeS,
+    sets: workingSets,
+    reps,
+    exercises: topSets.length,
+    topSets,
+  };
 }
 
 const ROLE_WEIGHT: Record<number, number> = { 3: 1, 2: 0.45, 1: 0.16 };

@@ -44,3 +44,8 @@ yarn-error.*
 .cache/
 preview/
 
+
+# signing material (never commit)
+signing/*.keystore
+signing/keystore.properties
+

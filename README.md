@@ -9,7 +9,7 @@ The point: you don't need Strava Premium, or any subscription, to post a
 correct-looking training card with a route on it.
 
 ```
-dist\proof-0.2.0.apk
+dist\proof-0.3.0.apk
 ```
 
 | Run card (story, 1080×1920) | Lift card (feed, 1080×1350) |
@@ -21,7 +21,7 @@ dist\proof-0.2.0.apk
 | ![Home](docs/screen-home.png) | ![Session](docs/screen-session-lift.png) | ![Library](docs/screen-library.png) |
 ---
 
-## What v0.2 does
+## What v0.3 does
 
 | Screen | What it does |
 | --- | --- |
@@ -113,14 +113,14 @@ outshines the bench press you actually came to do.
 
 <https://github.com/gipinze/proof/releases/latest>
 
-Tap the `proof-0.2.0.apk` asset, then allow "install unknown apps" for your
+Tap the `proof-0.3.0.apk` asset, then allow "install unknown apps" for your
 browser when Android asks. Requires Android 7+ (`minSdkVersion 24`); the APK has
 `arm64-v8a` and `x86_64` binaries.
 
 Other routes:
 
 ```powershell
-adb install -r dist\proof-0.2.0.apk     # phone plugged in, USB debugging on
+adb install -r dist\proof-0.3.0.apk     # phone plugged in, USB debugging on
 npm run apk                             # rebuild the release APK yourself
 ```
 
@@ -243,24 +243,40 @@ settings(key, value)
 ### Your data survives updates
 
 The database carries a `user_version` and upgrades in place (`src/db/db.ts`):
-v0.2 adds the `sets.distance_m` column to an existing v0.1 database without
-touching a row. Verified by installing 0.2.0 over 0.1.0 with live data — the
-sessions, sets and weekly totals came through intact.
+
+| Version | Change |
+| --- | --- |
+| 2 | `sets.distance_m` — carries, sleds and cardio measured in metres |
+| 3 | `sets.duration_s` — per-set time, for intervals and cardio |
+
+Each is an `ALTER TABLE … ADD COLUMN` guarded by `PRAGMA table_info`, so an
+existing database gains the column without touching a row. Verified twice by
+installing over a live install: 0.2.0 over 0.1.0, then 0.3.0 over 0.2.0 — all
+sessions, sets and weekly totals came through each time.
+
+**Signing.** Android only allows an in-place update when the signing key matches
+the installed app. The key now lives in this repo folder at
+`signing/proof.keystore` (gitignored, with `signing/keystore.properties`), and
+`plugins/withReleaseSigning.js` wires it into release builds. It is a copy of the
+identity your phone already trusts, so switching did not break updates — the
+0.3.0 APK has the same certificate digest as 0.2.0, confirmed with `apksigner`.
+
+Keep those two files safe and private. Lose them and you cannot update an
+installed app without an uninstall, which wipes the database. Back them up
+(password manager, private drive) before you publish anything.
 
 Rules of thumb:
 
 - Install updates **over** the old app (`adb install -r`, or tap the new APK) —
   never uninstall first.
-- Android only allows an in-place update when the signing key matches. Every
-  build so far uses the standard debug keystore on this machine, so rebuilds
-  here are fine. Build on another machine or with EAS and you get a *different*
-  key — Android will refuse the update and the only way in is an uninstall,
-  which wipes the data. Generate a dedicated keystore before that day comes.
-- Adding a schema change later: bump `SCHEMA_VERSION` and add a `from < N` case.
+- Adding a schema change later: bump `SCHEMA_VERSION`, add a `from < N` case.
+- Play Store distribution needs a *different*, properly protected upload key —
+  and that switch costs one uninstall. Do it before you accumulate real data if
+  you plan to publish.
 
 ---
 
-## Deliberate v0.2 limits
+## Deliberate v0.3 limits
 
 - **Foreground GPS only.** Keep the app open while running; screen can stay on
   (keep-awake is enabled on the Run tab). Background tracking needs a foreground

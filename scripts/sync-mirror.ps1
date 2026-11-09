@@ -20,6 +20,7 @@ if ($Full -or -not (Test-Path $Mirror)) {
   robocopy "$root\src" "$Mirror\src" /MIR /NFL /NDL /NJH /NJS | Out-Null
   robocopy "$root\assets" "$Mirror\assets" /MIR /NFL /NDL /NJH /NJS | Out-Null
   robocopy "$root\plugins" "$Mirror\plugins" /MIR /NFL /NDL /NJH /NJS | Out-Null
+  if (Test-Path "$root\signing") { robocopy "$root\signing" "$Mirror\signing" /MIR /NFL /NDL /NJH /NJS | Out-Null }
   foreach ($f in 'App.tsx', 'index.ts', 'app.json', 'package.json', 'tsconfig.json') {
     Copy-Item (Join-Path $root $f) (Join-Path $Mirror $f) -Force
   }

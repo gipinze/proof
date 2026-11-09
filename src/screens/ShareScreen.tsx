@@ -35,6 +35,8 @@ export function ShareScreen({
           exerciseId: s.exercise_id,
           weight: s.weight,
           reps: s.reps,
+          distanceM: s.distance_m ?? undefined,
+          durationS: s.duration_s ?? undefined,
           isWarmup: s.is_warmup === 1,
         })),
       );
@@ -75,23 +77,37 @@ export function ShareScreen({
     }
 
     const summary = summarizeSets(sets);
-    const carryOnly = summary.volume === 0 && summary.distanceM > 0;
+    const hasVolume = summary.volume > 0;
+    const hasDistance = summary.distanceM > 0;
+    // mixed sessions get both numbers; single-modality ones keep the set count
+    const stats = [
+      { label: 'Time', value: durationLong(session.duration_s ?? 0) },
+      ...(hasVolume && hasDistance
+        ? [
+            { label: 'Volume', value: num(Math.round(summary.volume)), unit: 'kg' },
+            { label: 'Distance', value: num(Math.round(summary.distanceM)), unit: 'm' },
+          ]
+        : [
+            { label: 'Sets', value: `${summary.sets}` },
+            hasVolume
+              ? { label: 'Volume', value: num(Math.round(summary.volume)), unit: 'kg' }
+              : { label: 'Distance', value: num(Math.round(summary.distanceM)), unit: 'm' },
+          ]),
+    ];
+
     return {
       kind: 'lift',
       athlete,
       title: session.title,
       dateLine: fullDate(session.started_at),
-      stats: [
-        { label: 'Time', value: durationLong(session.duration_s ?? 0) },
-        { label: 'Sets', value: `${summary.sets}` },
-        carryOnly
-          ? { label: 'Distance', value: num(Math.round(summary.distanceM)), unit: 'm' }
-          : { label: 'Volume', value: num(Math.round(summary.volume)), unit: 'kg' },
-      ],
-      caption:
-        summary.distanceM > 0
-          ? `${summary.exercises} exercises · ${num(Math.round(summary.distanceM))} m`
-          : `${summary.exercises} exercises · ${summary.reps} reps`,
+      stats,
+      caption: `${summary.exercises} ${summary.exercises === 1 ? 'exercise' : 'exercises'} · ${
+        summary.sets
+      } ${summary.sets === 1 ? 'set' : 'sets'}${
+        !hasVolume && hasDistance && summary.distanceTimeS > 0
+          ? ` · ${durationLong(summary.distanceTimeS)}`
+          : ''
+      }`,
       load: normalisedLoad(muscleLoad(sets)),
       format,
     };

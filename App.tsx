@@ -12,6 +12,7 @@ import { getDb, getSession, getSessionSets } from './src/db/db';
 import { ATHLETE_KEY, getSetting } from './src/db/settings';
 import type { ExerciseDef } from './src/data/exercises';
 import { emptyDraft, newKey, type LiftDraft, type Nav, type Route } from './src/nav';
+import { duration } from './src/lib/format';
 import { colors, space, type } from './src/theme';
 
 type TabName = 'home' | 'run' | 'library';
@@ -51,6 +52,7 @@ export default function App() {
           weight: String(set.weight),
           reps: String(set.reps || 8),
           distance: String(set.distance_m ?? 0),
+          time: set.duration_s ? duration(set.duration_s) : '',
         };
         if (last && last.exerciseId === set.exercise_id) last.sets.push(draftSet);
         else exercises.push({ key: newKey(), exerciseId: set.exercise_id, sets: [draftSet] });
@@ -97,6 +99,7 @@ export default function App() {
               weight: String(exercise.loadFactor === 0 ? 0 : 20),
               reps: '8',
               distance: isDistance ? '20' : '0',
+              time: '',
             },
           ],
         },

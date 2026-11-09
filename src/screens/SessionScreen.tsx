@@ -174,7 +174,11 @@ export function SessionScreen({ nav, sessionId }: { nav: Nav; sessionId: number 
               unit={summary.volume > 0 ? 'kg' : 'kg·m'}
               size="lg"
             />
-            <Stat label="Sets" value={`${summary.sets}`} size="lg" />
+            {hasDistanceWork ? (
+              <Stat label="Distance" value={num(Math.round(summary.distanceM))} unit="m" size="lg" />
+            ) : (
+              <Stat label="Sets" value={`${summary.sets}`} size="lg" />
+            )}
             <Stat label="Time" value={duration(seconds)} size="lg" />
           </View>
 
@@ -197,6 +201,8 @@ export function SessionScreen({ nav, sessionId }: { nav: Nav; sessionId: number 
                 {summary.loadDistance > 0
                   ? ` · ${num(Math.round(summary.loadDistance))} kg·m carried`
                   : ''}
+                {summary.distanceTimeS > 0 ? ` · ${duration(summary.distanceTimeS)} timed` : ''}
+                {` · ${summary.sets} ${summary.sets === 1 ? 'set' : 'sets'}`}
               </Text>
             </View>
           ) : null}
@@ -221,7 +227,7 @@ export function SessionScreen({ nav, sessionId }: { nav: Nav; sessionId: number 
                   : summary.distanceM > 0
                     ? `${num(Math.round(summary.distanceM))} m · `
                     : ''}
-                {summary.exercises} exercises
+                {summary.exercises} {summary.exercises === 1 ? 'exercise' : 'exercises'}
               </Text>
             }
           >
@@ -257,9 +263,9 @@ export function SessionScreen({ nav, sessionId }: { nav: Nav; sessionId: number 
                       >
                         <Text style={{ fontSize: 11.5, color: colors.text, fontWeight: '700', ...tabular }}>
                           {isDistance
-                            ? s.weight > 0
-                              ? `${i + 1}. ${s.weight}kg × ${s.distance_m ?? 0}m`
-                              : `${i + 1}. ${s.distance_m ?? 0}m`
+                            ? `${i + 1}. ${s.weight > 0 ? `${s.weight}kg × ` : ''}${s.distance_m ?? 0}m${
+                                s.duration_s ? ` · ${duration(s.duration_s)}` : ''
+                              }`
                             : `${i + 1}. ${s.weight}×${s.reps}`}
                         </Text>
                       </View>
