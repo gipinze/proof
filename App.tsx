@@ -10,6 +10,7 @@ import { SessionScreen } from './src/screens/SessionScreen';
 import { ShareScreen } from './src/screens/ShareScreen';
 import { ShareWeekScreen } from './src/screens/ShareWeekScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
+import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { ExerciseScreen } from './src/screens/ExerciseScreen';
 import { getDb, getSession, getSessionSets, getTemplate, parseTemplate } from './src/db/db';
 import { ATHLETE_KEY, getSetting } from './src/db/settings';
@@ -159,7 +160,8 @@ export default function App() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <StatusBar style="light" />
-      <View style={{ flex: 1 }}>
+      <ErrorBoundary onReset={() => nav.reset({ name: 'home' })}>
+        <View style={{ flex: 1 }}>
         {current.name === 'home' ? (
           <HomeScreen nav={nav} athlete={athlete} onAthleteChange={setAthlete} />
         ) : null}
@@ -177,7 +179,8 @@ export default function App() {
         {current.name === 'exercise' ? (
           <ExerciseScreen nav={nav} exerciseId={current.exerciseId} />
         ) : null}
-      </View>
+        </View>
+      </ErrorBoundary>
 
       {activeTab ? (
         <View

@@ -87,6 +87,42 @@ export async function pickBackup(): Promise<PickedBackup | null> {
   };
 }
 
+/**
+ * Restoring replaces everything, so keep what is on the phone right now in case
+ * the file you picked was the wrong one. Lives in the app's document directory
+ * (not cache) so it survives a restart.
+ */
+const SNAPSHOT = (FileSystem.documentDirectory ?? '') + 'proof-pre-restore.json';
+
+export async function snapshotBeforeRestore(): Promise<boolean> {
+  try {
+    const current = await exportBackup();
+    if (current.sessions.length === 0) return false;
+    await FileSystem.writeAsStringAsync(SNAPSHOT, JSON.stringify(current));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function hasPreRestoreSnapshot(): Promise<boolean> {
+  try {
+    const info = await FileSystem.getInfoAsync(SNAPSHOT);
+    return info.exists;
+  } catch {
+    return false;
+  }
+}
+
+/** Put back what was on the phone before the last restore. */
+export async function undoLastRestore(): Promise<number> {
+  const raw = await FileSystem.readAsStringAsync(SNAPSHOT);
+  const backup = validateBackup(JSON.parse(raw));
+  const summary = await importBackup(backup);
+  return summary.sessions;
+}
+
 export async function restoreBackup(backup: Backup) {
+  await snapshotBeforeRestore();
   return importBackup(backup);
 }

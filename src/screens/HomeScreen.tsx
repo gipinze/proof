@@ -19,6 +19,7 @@ import { duration, km, num, relativeDay, volumeParts } from '../lib/format';
 import { MUSCLE_NAME } from '../data/muscles';
 import { getExercise } from '../data/exercises';
 import { filterSessions, normalise } from '../lib/search';
+import { weekDeltaRatio } from '../lib/trend';
 import type { MuscleId } from '../data/anatomy';
 import type { Nav } from '../nav';
 import { colors, radius, space, tabular, type } from '../theme';
@@ -92,6 +93,9 @@ export function HomeScreen({
     const ids = new Set(filterSessions(searchable, query).map((session) => session.id));
     return sessions.filter((session) => ids.has(session.id));
   }, [searching, searchable, query, sessions]);
+
+  /** This week against the one before it, only when both have data. */
+  const weekDelta = useMemo(() => weekDeltaRatio(weekBuckets), [weekBuckets]);
 
   const today = useMemo(() => {
     const d = new Date();
@@ -173,7 +177,38 @@ export function HomeScreen({
             {volumeParts(week.volume).unit}
           </Text>
         </View>
-        <Text style={{ ...type.caption, color: colors.muted, marginTop: 2 }}>total volume lifted</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space(2), marginTop: 2 }}>
+          <Text style={{ ...type.caption, color: colors.muted }}>total volume lifted</Text>
+          {weekDelta !== null ? (
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 3,
+                backgroundColor: weekDelta >= 0 ? colors.accentDim : colors.surfaceAlt,
+                borderRadius: radius.pill,
+                paddingHorizontal: space(2),
+                paddingVertical: 2,
+              }}
+            >
+              <Ionicons
+                name={weekDelta >= 0 ? 'arrow-up' : 'arrow-down'}
+                size={9}
+                color={weekDelta >= 0 ? colors.accentText : colors.muted}
+              />
+              <Text
+                style={{
+                  fontSize: 10,
+                  fontWeight: '800',
+                  color: weekDelta >= 0 ? colors.accentText : colors.muted,
+                  ...tabular,
+                }}
+              >
+                {Math.abs(Math.round(weekDelta * 100))}% vs last week
+              </Text>
+            </View>
+          ) : null}
+        </View>
 
         <View style={{ flexDirection: 'row', marginTop: space(5), justifyContent: 'space-between' }}>
           <Stat label="Sessions" value={`${week.lifts + week.runs}`} size="md" />

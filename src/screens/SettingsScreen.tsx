@@ -3,14 +3,22 @@ import { Alert, Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Button, Card, IconButton, Screen, SectionLabel, TOP_INSET } from '../components/ui';
 import { exportBackup, listSessionSummaries } from '../db/db';
-import { pickBackup, restoreBackup, saveBackupToFolder, shareBackup } from '../lib/backupFile';
+import {
+  hasPreRestoreSnapshot,
+  pickBackup,
+  restoreBackup,
+  saveBackupToFolder,
+  shareBackup,
+  undoLastRestore,
+} from '../lib/backupFile';
 import type { Nav } from '../nav';
 import { colors, radius, space, type } from '../theme';
 
 /** Data safety: the only way the database leaves the phone. */
 export function SettingsScreen({ nav }: { nav: Nav }) {
   const [counts, setCounts] = useState({ sessions: 0, volume: 0 });
-  const [busy, setBusy] = useState<'export' | 'folder' | 'restore' | null>(null);
+  const [busy, setBusy] = useState<'export' | 'folder' | 'restore' | 'undo' | null>(null);
+  const [canUndo, setCanUndo] = useState(false);
 
   const load = useCallback(async () => {
     const sessions = await listSessionSummaries(500);
@@ -18,6 +26,7 @@ export function SettingsScreen({ nav }: { nav: Nav }) {
       sessions: sessions.length,
       volume: sessions.reduce((sum, s) => sum + s.volume, 0),
     });
+    setCanUndo(await hasPreRestoreSnapshot());
   }, []);
 
   useEffect(() => {
@@ -52,6 +61,32 @@ export function SettingsScreen({ nav }: { nav: Nav }) {
     } finally {
       setBusy(null);
     }
+  };
+
+  const onUndo = async () => {
+    Alert.alert(
+      'Undo the last restore?',
+      'This puts back the data that was on the phone before your last restore.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Undo',
+          style: 'destructive',
+          onPress: async () => {
+            setBusy('undo');
+            try {
+              const sessions = await undoLastRestore();
+              nav.bump();
+              Alert.alert('Undone', `${sessions} sessions from before the restore are back.`);
+            } catch (err) {
+              Alert.alert('Nothing to undo', err instanceof Error ? err.message : 'Unknown error');
+            } finally {
+              setBusy(null);
+            }
+          },
+        },
+      ],
+    );
   };
 
   const onRestore = async () => {
@@ -134,6 +169,16 @@ export function SettingsScreen({ nav }: { nav: Nav }) {
             loading={busy === 'folder'}
             style={{ marginTop: space(2) }}
           />
+          {canUndo ? (
+            <Button
+              label="Undo last restore"
+              icon="arrow-undo-outline"
+              variant="ghost"
+              onPress={onUndo}
+              loading={busy === 'undo'}
+              style={{ marginTop: space(2) }}
+            />
+          ) : null}
           <Button
             label="Restore from a file"
             icon="push-outline"
