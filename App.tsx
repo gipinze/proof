@@ -11,6 +11,7 @@ import { ShareScreen } from './src/screens/ShareScreen';
 import { ShareWeekScreen } from './src/screens/ShareWeekScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
+import { useBottomInset } from './src/lib/insets';
 import { ExerciseScreen } from './src/screens/ExerciseScreen';
 import { getDb, getSession, getSessionSets, getTemplate, parseTemplate } from './src/db/db';
 import { ATHLETE_KEY, getSetting } from './src/db/settings';
@@ -24,6 +25,7 @@ import { colors, space, type } from './src/theme';
 type TabName = 'home' | 'run' | 'library';
 
 export default function App() {
+  const insets = { bottom: useBottomInset() };
   const [ready, setReady] = useState(false);
   const [athlete, setAthlete] = useState('Athlete');
   const [draft, setDraft] = useState<LiftDraft>(emptyDraft());
@@ -189,7 +191,7 @@ export default function App() {
             borderTopWidth: 1,
             borderTopColor: colors.border,
             backgroundColor: colors.bg,
-            paddingBottom: space(4),
+            paddingBottom: insets.bottom + space(2),
             paddingTop: space(2),
           }}
         >

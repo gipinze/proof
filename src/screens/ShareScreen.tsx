@@ -15,6 +15,7 @@ import { captureCard, cardFilename, nameCard, saveToGallery, shareImage } from '
 import { muscleLoad, normalisedLoad, summarizeSets, type SetEntry } from '../lib/volume';
 import type { TrackPoint } from '../lib/geo';
 import type { Nav } from '../nav';
+import { useBottomInset } from '../lib/insets';
 import { colors, radius, space, type } from '../theme';
 
 export function ShareScreen({
@@ -26,6 +27,7 @@ export function ShareScreen({
   sessionId: number;
   athlete: string;
 }) {
+  const insets = { bottom: useBottomInset() };
   const [session, setSession] = useState<SessionRow | null>(null);
   const [sets, setSets] = useState<SetEntry[]>([]);
   const [format, setFormat] = useState<CardFormat>('story');
@@ -217,7 +219,7 @@ export function ShareScreen({
           gap: space(3),
           paddingHorizontal: space(4),
           paddingTop: space(3),
-          paddingBottom: space(5),
+          paddingBottom: insets.bottom + space(3),
           borderTopWidth: 1,
           borderTopColor: colors.border,
           backgroundColor: colors.surface,

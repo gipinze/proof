@@ -29,7 +29,7 @@ if (proofHasReleaseSigning) {
 const RELEASE_CONFIG = `
         if (proofHasReleaseSigning) {
             release {
-                storeFile rootProject.file(proofKeystore.getProperty('storeFile').replace('../', ''))
+                storeFile rootProject.file(proofKeystore.getProperty('storeFile'))
                 storePassword proofKeystore.getProperty('storePassword')
                 keyAlias proofKeystore.getProperty('keyAlias')
                 keyPassword proofKeystore.getProperty('keyPassword')
@@ -51,14 +51,17 @@ module.exports = function withReleaseSigning(config) {
     // 2. add the release signing config next to the debug one
     src = src.replace(/(signingConfigs\s*\{)/m, `$1${RELEASE_CONFIG}`);
 
-    // 3. point the release build type at it
+    // 3. point the release build type at it. Match the release block only:
+    // replacing the first occurrence in buildTypes would hit the debug block.
     src = src.replace(
-      /buildTypes\s*\{([\s\S]*?)release\s*\{([\s\S]*?)\}/m,
-      (match) =>
-        match.replace(
+      /(buildTypes\s*\{[\s\S]*?)release\s*\{([\s\S]*?)\n(\s*)\}/m,
+      (whole, head, body, indent) => {
+        const fixed = body.replace(
           /signingConfig\s+signingConfigs\.debug/,
           'signingConfig proofHasReleaseSigning ? signingConfigs.release : signingConfigs.debug',
-        ),
+        );
+        return `${head}release {${fixed}\n${indent}}`;
+      },
     );
 
     cfg.modResults.contents = src;

@@ -15,6 +15,7 @@ import { fullDate, km, num } from '../lib/format';
 import { captureCard, cardFilename, nameCard, saveToGallery, shareImage } from '../lib/share';
 import { normalisedLoad } from '../lib/volume';
 import type { Nav } from '../nav';
+import { useBottomInset } from '../lib/insets';
 import { colors, radius, space, type } from '../theme';
 
 function startOfWeek(): number {
@@ -26,6 +27,7 @@ function startOfWeek(): number {
 
 /** Shareable recap of the current week: volume, sessions, distance, muscles. */
 export function ShareWeekScreen({ nav, athlete }: { nav: Nav; athlete: string }) {
+  const insets = { bottom: useBottomInset() };
   const [summary, setSummary] = useState<WeekSummary | null>(null);
   const [format, setFormat] = useState<CardFormat>('story');
   const [theme, setTheme] = useState<CardTheme>('dark');
@@ -151,7 +153,7 @@ export function ShareWeekScreen({ nav, athlete }: { nav: Nav; athlete: string })
           gap: space(3),
           paddingHorizontal: space(4),
           paddingTop: space(3),
-          paddingBottom: space(5),
+          paddingBottom: insets.bottom + space(3),
           borderTopWidth: 1,
           borderTopColor: colors.border,
           backgroundColor: colors.surface,

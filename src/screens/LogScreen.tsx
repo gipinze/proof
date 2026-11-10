@@ -11,6 +11,7 @@ import { duration, kgLabel, num, parseTime, timeOfDay } from '../lib/format';
 import { BAR_KG, platesPerSide } from '../lib/plates';
 import { summarizeSets, type SetEntry } from '../lib/volume';
 import { draftToSets, newKey, type DraftExercise, type DraftSet, type LiftDraft, type Nav } from '../nav';
+import { useBottomInset } from '../lib/insets';
 import { colors, radius, space, tabular, type } from '../theme';
 
 export function LogScreen({
@@ -26,6 +27,7 @@ export function LogScreen({
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [now, setNow] = useState(Date.now());
+  const insets = { bottom: useBottomInset() };
   const [saving, setSaving] = useState(false);
   const [templateOpen, setTemplateOpen] = useState(false);
   const [templateName, setTemplateName] = useState('');
@@ -426,7 +428,7 @@ export function LogScreen({
           backgroundColor: colors.surface,
           paddingHorizontal: space(4),
           paddingTop: space(3),
-          paddingBottom: space(4),
+          paddingBottom: insets.bottom + space(3),
           flexDirection: 'row',
           alignItems: 'center',
           gap: space(4),

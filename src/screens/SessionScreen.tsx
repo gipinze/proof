@@ -21,10 +21,12 @@ import { duration, fullDate, km, kgLabel, num, pace, paceFrom } from '../lib/for
 import { muscleLoad, normalisedLoad, rankedMuscles, summarizeSets, type SetEntry } from '../lib/volume';
 import type { TrackPoint } from '../lib/geo';
 import type { Nav } from '../nav';
+import { useBottomInset } from '../lib/insets';
 import { colors, radius, space, tabular, type } from '../theme';
 
 export function SessionScreen({ nav, sessionId }: { nav: Nav; sessionId: number }) {
   const { width: winW } = useWindowDimensions();
+  const insets = { bottom: useBottomInset() };
   const [session, setSession] = useState<SessionRow | null>(null);
   const [sets, setSets] = useState<StoredSet[]>([]);
   const [renaming, setRenaming] = useState(false);
@@ -327,7 +329,7 @@ export function SessionScreen({ nav, sessionId }: { nav: Nav; sessionId: number 
           gap: space(3),
           paddingHorizontal: space(4),
           paddingTop: space(3),
-          paddingBottom: space(5),
+          paddingBottom: insets.bottom + space(3),
           borderTopWidth: 1,
           borderTopColor: colors.border,
           backgroundColor: colors.surface,
