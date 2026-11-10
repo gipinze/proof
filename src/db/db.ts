@@ -541,6 +541,7 @@ export type TemplateExercise = {
     durationS?: number;
     rpe?: number;
     note?: string;
+    isWarmup?: boolean;
   }[];
 };
 
@@ -761,4 +762,84 @@ export async function readBufferedPoints(): Promise<BufferedPoint[]> {
 export async function clearBufferedPoints(): Promise<void> {
   const db = await getDb();
   await db.execAsync(`DELETE FROM run_buffer`);
+}
+
+// ------------------------------------------------------- exercise history
+
+export type ExerciseSessionRow = {
+  sessionId: number;
+  startedAt: number;
+  title: string;
+  sets: number;
+  reps: number;
+  bestWeight: number;
+  bestReps: number;
+  best1rm: number;
+  volume: number;
+  distanceM: number;
+  topRpe: number | null;
+};
+
+/**
+ * One row per session that trained this exercise, newest first. The screen
+ * draws the trend from `best1rm`, which is the honest comparison across
+ * different rep ranges.
+ */
+export async function exerciseHistory(exerciseId: string): Promise<ExerciseSessionRow[]> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<{
+    session_id: number;
+    started_at: number;
+    title: string;
+    weight: number;
+    reps: number;
+    distance_m: number | null;
+    rpe: number | null;
+    is_warmup: number;
+  }>(
+    `SELECT s.session_id, ss.started_at, ss.title, s.weight, s.reps, s.distance_m, s.rpe, s.is_warmup
+       FROM sets s JOIN sessions ss ON ss.id = s.session_id
+      WHERE s.exercise_id = ?
+      ORDER BY ss.started_at DESC`,
+    [exerciseId],
+  );
+
+  const def = getExercise(exerciseId);
+  const bySession = new Map<number, ExerciseSessionRow>();
+
+  for (const row of rows) {
+    if (row.is_warmup) continue;
+    const entry =
+      bySession.get(row.session_id) ??
+      ({
+        sessionId: row.session_id,
+        startedAt: row.started_at,
+        title: row.title,
+        sets: 0,
+        reps: 0,
+        bestWeight: 0,
+        bestReps: 0,
+        best1rm: 0,
+        volume: 0,
+        distanceM: 0,
+        topRpe: null,
+      } satisfies ExerciseSessionRow);
+
+    entry.sets += 1;
+    entry.reps += row.reps;
+    entry.distanceM += row.distance_m ?? 0;
+    entry.volume += row.weight * def.loadFactor * row.reps;
+    entry.topRpe = row.rpe != null ? Math.max(entry.topRpe ?? 0, row.rpe) : entry.topRpe;
+
+    const e1rm = estimate1rm(row.weight, def.loadFactor, row.reps);
+    if (e1rm > entry.best1rm) {
+      entry.best1rm = e1rm;
+      entry.bestWeight = row.weight;
+      entry.bestReps = row.reps;
+    }
+
+    bySession.set(row.session_id, entry);
+  }
+
+  return [...bySession.values()].sort((a, b) => b.startedAt - a.startedAt);
 }

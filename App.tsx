@@ -10,6 +10,7 @@ import { SessionScreen } from './src/screens/SessionScreen';
 import { ShareScreen } from './src/screens/ShareScreen';
 import { ShareWeekScreen } from './src/screens/ShareWeekScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
+import { ExerciseScreen } from './src/screens/ExerciseScreen';
 import { getDb, getSession, getSessionSets, getTemplate, parseTemplate } from './src/db/db';
 import { ATHLETE_KEY, getSetting } from './src/db/settings';
 import type { ExerciseDef } from './src/data/exercises';
@@ -59,6 +60,7 @@ export default function App() {
           time: set.duration_s ? duration(set.duration_s) : '',
           rpe: set.rpe ? String(set.rpe) : '',
           note: set.note ?? '',
+          isWarmup: set.is_warmup === 1,
         };
         if (last && last.exerciseId === set.exercise_id) last.sets.push(draftSet);
         else exercises.push({ key: newKey(), exerciseId: set.exercise_id, sets: [draftSet] });
@@ -89,6 +91,7 @@ export default function App() {
         time: s.durationS ? duration(s.durationS) : '',
         rpe: s.rpe ? String(s.rpe) : '',
         note: s.note ?? '',
+        isWarmup: s.isWarmup ?? false,
       })),
     }));
     setDraft({ startedAt: Date.now(), title: row.name, exercises });
@@ -136,6 +139,7 @@ export default function App() {
               time: '',
               rpe: '',
               note: '',
+              isWarmup: false,
             },
           ],
         },
@@ -170,6 +174,9 @@ export default function App() {
         ) : null}
         {current.name === 'shareWeek' ? <ShareWeekScreen nav={nav} athlete={athlete} /> : null}
         {current.name === 'settings' ? <SettingsScreen nav={nav} /> : null}
+        {current.name === 'exercise' ? (
+          <ExerciseScreen nav={nav} exerciseId={current.exerciseId} />
+        ) : null}
       </View>
 
       {activeTab ? (

@@ -252,6 +252,7 @@ export function SessionScreen({ nav, sessionId }: { nav: Nav; sessionId: number 
               const distance = list.reduce((sum, s) => sum + (s.distance_m ?? 0), 0);
               return (
                 <Card key={exerciseId} style={{ padding: space(3.5) }}>
+                  <Pressable onPress={() => nav.push({ name: 'exercise', exerciseId })}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: space(2) }}>
                     <Text style={{ ...type.body, color: colors.text, flex: 1 }} numberOfLines={1}>
                       {exercise.name}
@@ -285,14 +286,15 @@ export function SessionScreen({ nav, sessionId }: { nav: Nav; sessionId: number 
                           backgroundColor: colors.surfaceAlt,
                           paddingHorizontal: space(2.5),
                           paddingVertical: 5,
+                          opacity: s.is_warmup ? 0.55 : 1,
                         }}
                       >
                         <Text style={{ fontSize: 11.5, color: colors.text, fontWeight: '700', ...tabular }}>
                           {isDistance
-                            ? `${i + 1}. ${s.weight > 0 ? `${s.weight}kg × ` : ''}${s.distance_m ?? 0}m${
+                            ? `${s.is_warmup ? 'W' : i + 1}. ${s.weight > 0 ? `${s.weight}kg × ` : ''}${s.distance_m ?? 0}m${
                                 s.duration_s ? ` · ${duration(s.duration_s)}` : ''
                               }`
-                            : `${i + 1}. ${s.weight}×${s.reps}${s.rpe ? ` @${s.rpe}` : ''}`}
+                            : `${s.is_warmup ? 'W' : i + 1}. ${s.weight}×${s.reps}${s.rpe ? ` @${s.rpe}` : ''}`}
                         </Text>
                       </View>
                     ))}
@@ -309,6 +311,7 @@ export function SessionScreen({ nav, sessionId }: { nav: Nav; sessionId: number 
                       )}
                     </View>
                   ) : null}
+                  </Pressable>
                 </Card>
               );
             })}

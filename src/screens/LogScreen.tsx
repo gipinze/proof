@@ -97,6 +97,7 @@ export function LogScreen({
                 time: '',
                 rpe: '',
                 note: '',
+                isWarmup: false,
               },
             ],
           },
@@ -146,6 +147,7 @@ export function LogScreen({
               time: last?.time ?? '',
               rpe: last?.rpe ?? '',
               note: '',
+              isWarmup: false,
             },
           ],
         };
@@ -803,12 +805,30 @@ function ExerciseBlock({
               key={set.key}
               onLongPress={() => onEditNote(set.key)}
               delayLongPress={350}
-              style={{ flexDirection: 'row', alignItems: 'center', gap: space(2), marginTop: space(2) }}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: space(2),
+                marginTop: space(2),
+                opacity: set.isWarmup ? 0.55 : 1,
+              }}
             >
-              <View style={{ width: 26, flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-                <Text style={{ ...type.caption, color: colors.muted, ...tabular }}>{i + 1}</Text>
+              <Pressable
+                onPress={() => onUpdateSet(set.key, { isWarmup: !set.isWarmup })}
+                hitSlop={8}
+                style={{ width: 26, flexDirection: 'row', alignItems: 'center', gap: 2 }}
+              >
+                <Text
+                  style={{
+                    ...type.caption,
+                    color: set.isWarmup ? colors.faint : colors.muted,
+                    ...tabular,
+                  }}
+                >
+                  {set.isWarmup ? 'W' : i + 1}
+                </Text>
                 {set.note ? <Ionicons name="document-text" size={10} color={colors.accentText} /> : null}
-              </View>
+              </Pressable>
 
               {isDistance ? (
                 <>
