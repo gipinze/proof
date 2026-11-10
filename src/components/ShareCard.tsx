@@ -8,7 +8,7 @@ import { tabular } from '../theme';
 export type CardFormat = 'story' | 'feed';
 
 export type CardModel = {
-  kind: 'lift' | 'run';
+  kind: 'lift' | 'run' | 'week';
   athlete: string;
   title: string;
   dateLine: string;
@@ -132,7 +132,7 @@ export function ShareCard({ model }: { model: CardModel }) {
           />
         ) : null}
 
-        {model.kind === 'lift' ? (
+        {(model.kind === 'lift' || model.kind === 'week') ? (
           <View
             style={{
               alignItems: 'center',

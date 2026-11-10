@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Pressable, Text, TextInput, View } from 'react-native';
+import { Alert, Modal, Pressable, Text, TextInput, View } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
 import { Button, Card, IconButton, Screen } from '../components/ui';
 import { ExercisePicker } from '../components/ExercisePicker';
 import { getExercise, type ExerciseDef } from '../data/exercises';
-import { lastDistanceFor, lastWeightFor, saveLift, updateLift } from '../db/db';
+import { lastDistanceFor, lastWeightFor, saveLift, saveTemplate, updateLift } from '../db/db';
 import { duration, kgLabel, num, parseTime, timeOfDay } from '../lib/format';
 import { summarizeSets, type SetEntry } from '../lib/volume';
 import { draftToSets, newKey, type DraftExercise, type DraftSet, type LiftDraft, type Nav } from '../nav';
@@ -24,6 +25,11 @@ export function LogScreen({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [now, setNow] = useState(Date.now());
   const [saving, setSaving] = useState(false);
+  const [templateOpen, setTemplateOpen] = useState(false);
+  const [templateName, setTemplateName] = useState('');
+  /** Rest countdown, in ms remaining; null when idle. */
+  const [restLeft, setRestLeft] = useState<number | null>(null);
+  const REST_MS = 90_000;
   /** Edit mode: extend the session end time to "now" instead of keeping it. */
   const [extendToNow, setExtendToNow] = useState(false);
   const lastWeightCache = useRef<Record<string, number | null>>({});
@@ -32,6 +38,22 @@ export function LogScreen({
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
   }, []);
+
+  useEffect(() => {
+    if (restLeft === null) return;
+    const id = setInterval(() => {
+      setRestLeft((left) => {
+        if (left === null) return null;
+        const next = left - 500;
+        if (next <= 0) {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+          return null;
+        }
+        return next;
+      });
+    }, 500);
+    return () => clearInterval(id);
+  }, [restLeft === null]);
 
   const sets: SetEntry[] = useMemo(() => draftToSets(draft), [draft]);
   const summary = useMemo(() => summarizeSets(sets), [sets]);
@@ -86,7 +108,10 @@ export function LogScreen({
     }));
   };
 
+  const startRest = () => setRestLeft(REST_MS);
+
   const addSet = (exKey: string) => {
+    startRest();
     setDraft((d) => ({
       ...d,
       exercises: d.exercises.map((ex) => {
@@ -120,6 +145,26 @@ export function LogScreen({
 
   const removeExercise = (exKey: string) => {
     setDraft((d) => ({ ...d, exercises: d.exercises.filter((ex) => ex.key !== exKey) }));
+  };
+
+  const saveAsTemplate = async () => {
+    const name = templateName.trim();
+    if (!name) {
+      setTemplateOpen(false);
+      return;
+    }
+    const exercises = draft.exercises.map((block) => ({
+      exerciseId: block.exerciseId,
+      sets: block.sets.map((s) => ({
+        weight: Number.parseFloat(s.weight.replace(',', '.')) || 0,
+        reps: Number.parseInt(s.reps, 10) || 0,
+        distanceM: Number.parseFloat(s.distance.replace(',', '.')) || undefined,
+        durationS: parseTime(s.time) || undefined,
+      })),
+    }));
+    await saveTemplate(name, exercises);
+    setTemplateOpen(false);
+    Alert.alert('Template saved', 'Reuse it from Home next time.');
   };
 
   const finish = async () => {
@@ -209,6 +254,48 @@ export function LogScreen({
               </Text>
             )}
             <View style={{ flex: 1 }} />
+
+            <Pressable
+              onPress={() => (restLeft === null ? startRest() : setRestLeft(null))}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 5,
+                backgroundColor: restLeft !== null ? colors.accentDim : colors.surface,
+                borderRadius: radius.pill,
+                paddingHorizontal: space(2.5),
+                paddingVertical: 6,
+              }}
+            >
+              <Ionicons
+                name={restLeft !== null ? 'timer' : 'timer-outline'}
+                size={13}
+                color={restLeft !== null ? colors.accentText : colors.muted}
+              />
+              <Text
+                style={{
+                  ...type.caption,
+                  color: restLeft !== null ? colors.accentText : colors.muted,
+                  ...tabular,
+                }}
+              >
+                {restLeft !== null ? duration(restLeft / 1000) : 'Rest'}
+              </Text>
+            </Pressable>
+
+            {draft.exercises.length > 0 ? (
+              <Pressable
+                onPress={() => {
+                  setTemplateName(draft.title.trim() || defaultTitle);
+                  setTemplateOpen(true);
+                }}
+                hitSlop={8}
+                style={{ paddingHorizontal: space(1.5) }}
+              >
+                <Ionicons name="bookmark-outline" size={18} color={colors.muted} />
+              </Pressable>
+            ) : null}
+
             <View
               style={{
                 flexDirection: 'row',
@@ -315,6 +402,51 @@ export function LogScreen({
           loading={saving}
         />
       </View>
+
+      <Modal
+        visible={templateOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setTemplateOpen(false)}
+      >
+        <Pressable
+          style={{ flex: 1, backgroundColor: '#000000AA', justifyContent: 'center', padding: space(6) }}
+          onPress={() => setTemplateOpen(false)}
+        >
+          <Pressable style={{ backgroundColor: colors.surface, borderRadius: radius.lg, padding: space(5) }}>
+            <Text style={{ ...type.title, color: colors.text }}>Save as template</Text>
+            <Text style={{ ...type.caption, color: colors.muted, marginTop: 4 }}>
+              Keeps these exercises and their last weights, ready to start again.
+            </Text>
+            <TextInput
+              value={templateName}
+              onChangeText={setTemplateName}
+              autoFocus
+              placeholder="Push A"
+              placeholderTextColor={colors.faint}
+              style={{
+                marginTop: space(4),
+                backgroundColor: colors.surfaceAlt,
+                borderRadius: radius.md,
+                paddingHorizontal: space(4),
+                paddingVertical: 13,
+                color: colors.text,
+                fontSize: 16,
+                fontWeight: '600',
+              }}
+            />
+            <View style={{ flexDirection: 'row', gap: space(3), marginTop: space(4) }}>
+              <Button
+                label="Cancel"
+                variant="ghost"
+                onPress={() => setTemplateOpen(false)}
+                style={{ flex: 1 }}
+              />
+              <Button label="Save" onPress={saveAsTemplate} style={{ flex: 1 }} />
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       <ExercisePicker visible={pickerOpen} onClose={() => setPickerOpen(false)} onPick={addExercise} />
     </View>

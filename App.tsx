@@ -8,7 +8,8 @@ import { RunScreen } from './src/screens/RunScreen';
 import { LibraryScreen } from './src/screens/LibraryScreen';
 import { SessionScreen } from './src/screens/SessionScreen';
 import { ShareScreen } from './src/screens/ShareScreen';
-import { getDb, getSession, getSessionSets } from './src/db/db';
+import { ShareWeekScreen } from './src/screens/ShareWeekScreen';
+import { getDb, getSession, getSessionSets, getTemplate, parseTemplate } from './src/db/db';
 import { ATHLETE_KEY, getSetting } from './src/db/settings';
 import type { ExerciseDef } from './src/data/exercises';
 import { emptyDraft, newKey, type LiftDraft, type Nav, type Route } from './src/nav';
@@ -70,6 +71,25 @@ export default function App() {
     [],
   );
 
+  /** Pre-fill a new workout from a saved template. */
+  const startTemplate = useCallback(async (templateId: number) => {
+    const row = await getTemplate(templateId);
+    if (!row) return;
+    const exercises = parseTemplate(row).map((block) => ({
+      key: newKey(),
+      exerciseId: block.exerciseId,
+      sets: block.sets.map((s) => ({
+        key: newKey(),
+        weight: String(s.weight ?? 0),
+        reps: String(s.reps || 8),
+        distance: String(s.distanceM ?? 0),
+        time: s.durationS ? duration(s.durationS) : '',
+      })),
+    }));
+    setDraft({ startedAt: Date.now(), title: row.name, exercises });
+    setStack((s) => [...s, { name: 'log' }]);
+  }, []);
+
   const nav: Nav = {
     push: (route) => setStack((s) => [...s, route]),
     back: () => setStack((s) => (s.length > 1 ? s.slice(0, -1) : s)),
@@ -77,6 +97,9 @@ export default function App() {
       setStack((s) => (route.name === 'home' ? [{ name: 'home' }] : [...s.slice(0, 1), route])),
     editSession: (id) => {
       editSession(id).catch(() => {});
+    },
+    startTemplate: (id) => {
+      startTemplate(id).catch(() => {});
     },
     bump,
     dataVersion,
@@ -134,6 +157,7 @@ export default function App() {
         {current.name === 'share' ? (
           <ShareScreen nav={nav} sessionId={current.id} athlete={athlete} />
         ) : null}
+        {current.name === 'shareWeek' ? <ShareWeekScreen nav={nav} athlete={athlete} /> : null}
       </View>
 
       {activeTab ? (

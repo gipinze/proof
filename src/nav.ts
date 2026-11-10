@@ -7,7 +7,8 @@ export type Route =
   | { name: 'run' }
   | { name: 'library' }
   | { name: 'session'; id: number }
-  | { name: 'share'; id: number };
+  | { name: 'share'; id: number }
+  | { name: 'shareWeek' };
 
 export type Nav = {
   push: (route: Route) => void;
@@ -15,6 +16,8 @@ export type Nav = {
   reset: (route: Route) => void;
   /** Load a saved lift back into the logger so it can be corrected. */
   editSession: (id: number) => void;
+  /** Start a new workout pre-filled from a saved template. */
+  startTemplate: (templateId: number) => void;
   /** Bumped after any write so lists know to refetch. */
   bump: () => void;
   dataVersion: number;

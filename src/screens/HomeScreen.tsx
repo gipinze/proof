@@ -5,8 +5,10 @@ import { Button, Card, IconButton, Screen, SectionLabel, Stat } from '../compone
 import {
   listSessionSummaries,
   muscleSetsSince,
+  listTemplates,
   statsSince,
   weeklyVolume,
+  type TemplateRow,
   type SessionListItem,
   type WeekBucket,
 } from '../db/db';
@@ -30,17 +32,20 @@ export function HomeScreen({
   const [week, setWeek] = useState({ volume: 0, distanceM: 0, lifts: 0, runs: 0 });
   const [weekBuckets, setWeekBuckets] = useState<WeekBucket[]>([]);
   const [topMuscles, setTopMuscles] = useState<{ id: MuscleId; load: number }[]>([]);
+  const [templates, setTemplates] = useState<TemplateRow[]>([]);
   const [editing, setEditing] = useState(false);
   const [nameDraft, setNameDraft] = useState(athlete);
 
   const load = useCallback(async () => {
     const weekStart = startOfWeek();
-    const [list, stats, buckets, muscle] = await Promise.all([
+    const [list, stats, buckets, muscle, tpl] = await Promise.all([
       listSessionSummaries(25),
       statsSince(weekStart),
       weeklyVolume(6),
       muscleSetsSince(weekStart),
+      listTemplates(),
     ]);
+    setTemplates(tpl);
     setSessions(list);
     setWeek(stats);
     setWeekBuckets(buckets);
@@ -109,7 +114,19 @@ export function HomeScreen({
       </Pressable>
 
       <Card style={{ marginTop: space(6), padding: space(5) }}>
-        <Text style={{ ...type.tiny, color: colors.faint, textTransform: 'uppercase' }}>This week</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <Text style={{ ...type.tiny, color: colors.faint, textTransform: 'uppercase', flex: 1 }}>
+            This week
+          </Text>
+          <Pressable
+            onPress={() => nav.push({ name: 'shareWeek' })}
+            hitSlop={10}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+          >
+            <Ionicons name="share-outline" size={13} color={colors.accentText} />
+            <Text style={{ ...type.tiny, color: colors.accentText }}>RECAP</Text>
+          </Pressable>
+        </View>
         <View style={{ flexDirection: 'row', alignItems: 'baseline', marginTop: 6 }}>
           <Text style={{ fontSize: 42, fontWeight: '800', color: colors.text, letterSpacing: -1.6, ...tabular }}>
             {volumeParts(week.volume).value}
@@ -142,6 +159,51 @@ export function HomeScreen({
           style={{ flex: 1 }}
         />
       </View>
+
+      {templates.length > 0 ? (
+        <>
+          <SectionLabel>Templates</SectionLabel>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space(2) }}>
+            {templates.map((template) => (
+              <Pressable
+                key={template.id}
+                onPress={() => nav.startTemplate(template.id)}
+                onLongPress={() =>
+                  Alert.alert('Delete template?', template.name, [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                      text: 'Delete',
+                      style: 'destructive',
+                      onPress: async () => {
+                        const { deleteTemplate } = await import('../db/db');
+                        await deleteTemplate(template.id);
+                        nav.bump();
+                      },
+                    },
+                  ])
+                }
+                style={({ pressed }) => ({
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: space(2),
+                  backgroundColor: colors.surface,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  borderRadius: radius.pill,
+                  paddingHorizontal: space(3.5),
+                  paddingVertical: space(2.5),
+                  opacity: pressed ? 0.7 : 1,
+                })}
+              >
+                <Ionicons name="bookmark-outline" size={14} color={colors.accentText} />
+                <Text style={{ ...type.caption, color: colors.text }} numberOfLines={1}>
+                  {template.name}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </>
+      ) : null}
 
       {weekBuckets.some((b) => b.volume > 0 || b.distanceM > 0) ? (
         <>

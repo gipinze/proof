@@ -33,7 +33,7 @@ export type StoredSet = {
  * Schema version. Bump this and add a case in `migrate` whenever the shape
  * changes — installed apps upgrade in place and must never lose their data.
  */
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 
 let dbPromise: Promise<SQLite.SQLiteDatabase> | null = null;
 
@@ -68,6 +68,12 @@ async function migrate(db: SQLite.SQLiteDatabase, from: number) {
         key TEXT PRIMARY KEY,
         value TEXT NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS templates (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        body TEXT NOT NULL
+      );
     `);
   }
 
@@ -77,6 +83,18 @@ async function migrate(db: SQLite.SQLiteDatabase, from: number) {
     if (!columns.some((c) => c.name === 'distance_m')) {
       await db.execAsync(`ALTER TABLE sets ADD COLUMN distance_m REAL`);
     }
+  }
+
+  if (from < 4) {
+    // v0.5: reusable workout templates
+    await db.execAsync(`
+      CREATE TABLE IF NOT EXISTS templates (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        body TEXT NOT NULL
+      );
+    `);
   }
 
   if (from < 3) {
@@ -462,4 +480,119 @@ export async function muscleSetsSince(fromMs: number): Promise<Record<string, nu
   const { muscleLoad } = await import('../lib/volume');
   const load = muscleLoad(rows.map((r) => ({ exerciseId: r.exercise_id, weight: 1, reps: 1 })));
   return load as Record<string, number>;
+}
+
+// ---------------------------------------------------------------- templates
+
+export type TemplateRow = {
+  id: number;
+  name: string;
+  created_at: number;
+  body: string;
+};
+
+export type TemplateExercise = {
+  exerciseId: string;
+  sets: { weight: number; reps: number; distanceM?: number; durationS?: number }[];
+};
+
+export async function saveTemplate(name: string, exercises: TemplateExercise[]): Promise<number> {
+  const db = await getDb();
+  const res = await db.runAsync(
+    `INSERT INTO templates (name, created_at, body) VALUES (?, ?, ?)`,
+    [name, Date.now(), JSON.stringify(exercises)],
+  );
+  return res.lastInsertRowId;
+}
+
+export async function listTemplates(): Promise<TemplateRow[]> {
+  const db = await getDb();
+  return db.getAllAsync<TemplateRow>(`SELECT * FROM templates ORDER BY created_at DESC`);
+}
+
+export async function getTemplate(id: number): Promise<TemplateRow | null> {
+  const db = await getDb();
+  const row = await db.getFirstAsync<TemplateRow>(`SELECT * FROM templates WHERE id = ?`, [id]);
+  return row ?? null;
+}
+
+export async function deleteTemplate(id: number): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(`DELETE FROM templates WHERE id = ?`, [id]);
+}
+
+export function parseTemplate(row: TemplateRow): TemplateExercise[] {
+  try {
+    const parsed = JSON.parse(row.body) as TemplateExercise[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+// --------------------------------------------------------------- week recap
+
+export type WeekSummary = {
+  from: number;
+  to: number;
+  sessions: number;
+  lifts: number;
+  runs: number;
+  volume: number;
+  distanceM: number;
+  loadDistance: number;
+  muscle: Record<string, number>;
+};
+
+/** Everything the recap card needs for a Monday-to-now window. */
+export async function weekSummary(fromMs: number): Promise<WeekSummary> {
+  const db = await getDb();
+  const to = Date.now();
+  const sessions = await db.getAllAsync<{ id: number; kind: SessionKind; distance_m: number | null }>(
+    `SELECT id, kind, distance_m FROM sessions WHERE started_at >= ? AND started_at <= ?`,
+    [fromMs, to],
+  );
+
+  const setRows = await db.getAllAsync<{
+    exercise_id: string;
+    weight: number;
+    reps: number;
+    distance_m: number | null;
+    is_warmup: number;
+  }>(
+    `SELECT s.exercise_id, s.weight, s.reps, s.distance_m, s.is_warmup
+       FROM sets s JOIN sessions ss ON ss.id = s.session_id
+      WHERE ss.started_at >= ? AND ss.started_at <= ?`,
+    [fromMs, to],
+  );
+
+  const { muscleLoad } = await import('../lib/volume');
+  let volume = 0;
+  let loadDistance = 0;
+  for (const row of setRows) {
+    if (row.is_warmup) continue;
+    const def = getExercise(row.exercise_id);
+    if (def.measure === 'distance') loadDistance += row.weight * def.loadFactor * (row.distance_m ?? 0);
+    else volume += row.weight * def.loadFactor * row.reps;
+  }
+
+  const muscle = muscleLoad(
+    setRows
+      .filter((r) => !r.is_warmup)
+      .map((r) => ({ exerciseId: r.exercise_id, weight: 1, reps: 1 })),
+  ) as Record<string, number>;
+
+  return {
+    from: fromMs,
+    to,
+    sessions: sessions.length,
+    lifts: sessions.filter((s) => s.kind === 'lift').length,
+    runs: sessions.filter((s) => s.kind === 'run').length,
+    volume,
+    distanceM:
+      sessions.reduce((sum, s) => sum + (s.distance_m ?? 0), 0) +
+      setRows.reduce((sum, r) => sum + (r.is_warmup ? 0 : (r.distance_m ?? 0)), 0),
+    loadDistance,
+    muscle,
+  };
 }
