@@ -5,7 +5,8 @@
 const fs = require('fs');
 const path = require('path');
 
-const SQL = 'F:/AI Code Claude/Personal/TrainHeroic clone/exercise-enrichment.sql';
+// point this at the sibling audit dump if you want to re-run the comparison
+const SQL = process.env.EXERCISE_SQL ?? '../TrainHeroic clone/exercise-enrichment.sql';
 const raw = fs.readFileSync(SQL, 'utf8');
 
 const lines = raw.split(/\r?\n/);
