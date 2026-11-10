@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Card, Empty, IconButton, Screen, SectionLabel, TOP_INSET } from '../components/ui';
 import { getExercise } from '../data/exercises';
 import { MUSCLE_NAME } from '../data/muscles';
-import { exerciseHistory, type ExerciseSessionRow } from '../db/db';
+import { allExerciseNotes, exerciseHistory, type ExerciseSessionRow } from '../db/db';
+import { ExerciseNoteSheet } from '../components/ExerciseNoteSheet';
 import { kgLabel, num, relativeDay } from '../lib/format';
 import type { Nav } from '../nav';
 import { colors, radius, space, tabular, type } from '../theme';
@@ -23,9 +24,13 @@ export function ExerciseScreen({
 }) {
   const exercise = getExercise(exerciseId);
   const [rows, setRows] = useState<ExerciseSessionRow[]>([]);
+  const [preNote, setPreNote] = useState('');
+  const [sheetOpen, setSheetOpen] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
   const load = useCallback(async () => {
+    const notes = await allExerciseNotes();
+    setPreNote(notes[exerciseId] ?? '');
     setRows(await exerciseHistory(exerciseId));
     setLoaded(true);
   }, [exerciseId]);
@@ -73,6 +78,40 @@ export function ExerciseScreen({
             {exercise.equipment} · {Object.values(exercise.muscles).length} muscles
           </Text>
         </View>
+
+        <Pressable
+          onPress={() => setSheetOpen(true)}
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: space(2),
+            marginTop: space(3),
+            backgroundColor: colors.surface,
+            borderWidth: 1,
+            borderColor: colors.border,
+            borderRadius: radius.md,
+            paddingHorizontal: space(3.5),
+            paddingVertical: space(2.5),
+          }}
+        >
+          <Ionicons name={preNote ? 'flag' : 'flag-outline'} size={14} color={preNote ? colors.accentText : colors.faint} />
+          <Text
+            style={{ ...type.caption, color: preNote ? colors.text : colors.faint, flex: 1 }}
+            numberOfLines={2}
+          >
+            {preNote || 'Add a pre-note or target'}
+          </Text>
+          <Ionicons name="create-outline" size={13} color={colors.faint} />
+        </Pressable>
+
+        <ExerciseNoteSheet
+          visible={sheetOpen}
+          exerciseId={exerciseId}
+          exerciseName={exercise.name}
+          initial={preNote}
+          onClose={() => setSheetOpen(false)}
+          onSaved={setPreNote}
+        />
 
         {!loaded ? null : rows.length === 0 ? (
           <Empty

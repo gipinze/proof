@@ -7,7 +7,9 @@ import {
   muscleSetsSince,
   listTemplates,
   statsSince,
+  searchIndex,
   weeklyVolume,
+  type SearchIndexRow,
   type TemplateRow,
   type SessionListItem,
   type WeekBucket,
@@ -15,6 +17,8 @@ import {
 import { getSetting, setSetting, ATHLETE_KEY } from '../db/settings';
 import { duration, km, num, relativeDay, volumeParts } from '../lib/format';
 import { MUSCLE_NAME } from '../data/muscles';
+import { getExercise } from '../data/exercises';
+import { filterSessions, normalise } from '../lib/search';
 import type { MuscleId } from '../data/anatomy';
 import type { Nav } from '../nav';
 import { colors, radius, space, tabular, type } from '../theme';
@@ -33,6 +37,8 @@ export function HomeScreen({
   const [weekBuckets, setWeekBuckets] = useState<WeekBucket[]>([]);
   const [topMuscles, setTopMuscles] = useState<{ id: MuscleId; load: number }[]>([]);
   const [templates, setTemplates] = useState<TemplateRow[]>([]);
+  const [query, setQuery] = useState('');
+  const [index, setIndex] = useState<SearchIndexRow[]>([]);
   const [editing, setEditing] = useState(false);
   const [nameDraft, setNameDraft] = useState(athlete);
 
@@ -46,6 +52,7 @@ export function HomeScreen({
       listTemplates(),
     ]);
     setTemplates(tpl);
+    setIndex(await searchIndex());
     setSessions(list);
     setWeek(stats);
     setWeekBuckets(buckets);
@@ -60,6 +67,31 @@ export function HomeScreen({
   useEffect(() => {
     load().catch(() => {});
   }, [load, nav.dataVersion]);
+
+  /** Sessions as the search sees them: title + exercises + notes. */
+  const searchable = useMemo(
+    () =>
+      sessions.map((session) => {
+        const rows = index.filter((row) => row.session_id === session.id);
+        return {
+          id: session.id,
+          title: session.title,
+          exercises: [...new Set(rows.map((row) => getExercise(row.exercise_id).name))],
+          notes: rows
+            .map((row) => row.note)
+            .filter(Boolean)
+            .join(' '),
+        };
+      }),
+    [sessions, index],
+  );
+
+  const searching = normalise(query).length > 0;
+  const shown = useMemo(() => {
+    if (!searching) return sessions;
+    const ids = new Set(filterSessions(searchable, query).map((session) => session.id));
+    return sessions.filter((session) => ids.has(session.id));
+  }, [searching, searchable, query, sessions]);
 
   const today = useMemo(() => {
     const d = new Date();
@@ -293,10 +325,44 @@ export function HomeScreen({
           </Pressable>
         }
       >
-        Recent
+        {searching ? `${shown.length} found` : 'Recent'}
       </SectionLabel>
 
-      {sessions.length === 0 ? (
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: space(2),
+          backgroundColor: colors.surface,
+          borderWidth: 1,
+          borderColor: colors.border,
+          borderRadius: radius.md,
+          paddingHorizontal: space(3.5),
+          marginBottom: space(2),
+        }}
+      >
+        <Ionicons name="search" size={15} color={colors.faint} />
+        <TextInput
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Search sessions, lifts, notes"
+          placeholderTextColor={colors.faint}
+          returnKeyType="search"
+          style={{
+            flex: 1,
+            paddingVertical: 11,
+            color: colors.text,
+            fontSize: 14.5,
+          }}
+        />
+        {query.length > 0 ? (
+          <Pressable onPress={() => setQuery('')} hitSlop={8}>
+            <Ionicons name="close-circle" size={16} color={colors.faint} />
+          </Pressable>
+        ) : null}
+      </View>
+
+      {shown.length === 0 ? (
         <Card style={{ alignItems: 'center', paddingVertical: space(8) }}>
           <Ionicons name="pulse-outline" size={26} color={colors.faint} />
           <Text style={{ ...type.body, color: colors.text, marginTop: space(2) }}>Nothing logged yet</Text>
@@ -317,7 +383,7 @@ export function HomeScreen({
         </Card>
       ) : (
         <View style={{ gap: space(2) }}>
-          {sessions.map((s) => (
+          {shown.map((s) => (
             <Pressable
               key={s.id}
               onPress={() => nav.push({ name: 'session', id: s.id })}

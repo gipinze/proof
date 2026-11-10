@@ -35,7 +35,7 @@ export type StoredSet = {
  * Schema version. Bump this and add a case in `migrate` whenever the shape
  * changes — installed apps upgrade in place and must never lose their data.
  */
-const SCHEMA_VERSION = 7;
+const SCHEMA_VERSION = 8;
 
 let dbPromise: Promise<SQLite.SQLiteDatabase> | null = null;
 
@@ -72,6 +72,11 @@ async function migrate(db: SQLite.SQLiteDatabase, from: number) {
         key TEXT PRIMARY KEY,
         value TEXT NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS exercise_notes (
+        exercise_id TEXT PRIMARY KEY,
+        note TEXT NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
       CREATE TABLE IF NOT EXISTS run_buffer (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         lat REAL NOT NULL,
@@ -94,6 +99,17 @@ async function migrate(db: SQLite.SQLiteDatabase, from: number) {
     if (!columns.some((c) => c.name === 'distance_m')) {
       await db.execAsync(`ALTER TABLE sets ADD COLUMN distance_m REAL`);
     }
+  }
+
+  if (from < 8) {
+    // v0.10: a standing note or target per exercise ("3×5 at 110")
+    await db.execAsync(`
+      CREATE TABLE IF NOT EXISTS exercise_notes (
+        exercise_id TEXT PRIMARY KEY,
+        note TEXT NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+    `);
   }
 
   if (from < 7) {
@@ -842,4 +858,58 @@ export async function exerciseHistory(exerciseId: string): Promise<ExerciseSessi
   }
 
   return [...bySession.values()].sort((a, b) => b.startedAt - a.startedAt);
+}
+
+// ------------------------------------------------------------- search index
+
+export type SearchIndexRow = { session_id: number; exercise_id: string; note: string | null };
+
+/**
+ * Which exercises (and notes) belong to which session, newest sessions first.
+ * Search runs in JS against the exercise catalogue, so the database only has to
+ * hand over ids.
+ */
+export async function searchIndex(limit = 400): Promise<SearchIndexRow[]> {
+  const db = await getDb();
+  const recent = await db.getAllAsync<{ id: number }>(
+    `SELECT id FROM sessions ORDER BY started_at DESC LIMIT ?`,
+    [limit],
+  );
+  if (recent.length === 0) return [];
+
+  const ids = recent.map((row) => row.id);
+  const placeholders = ids.map(() => '?').join(',');
+  return db.getAllAsync<SearchIndexRow>(
+    `SELECT session_id, exercise_id, note FROM sets WHERE session_id IN (${placeholders})`,
+    ids,
+  );
+}
+
+
+// --------------------------------------------------------- exercise notes
+
+export type ExerciseNote = { exerciseId: string; note: string; updatedAt: number };
+
+export async function allExerciseNotes(): Promise<Record<string, string>> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<{ exercise_id: string; note: string }>(
+    `SELECT exercise_id, note FROM exercise_notes`,
+  );
+  const out: Record<string, string> = {};
+  for (const row of rows) out[row.exercise_id] = row.note;
+  return out;
+}
+
+export async function setExerciseNote(exerciseId: string, note: string): Promise<void> {
+  const db = await getDb();
+  const trimmed = note.trim();
+  if (trimmed.length === 0) {
+    await db.runAsync(`DELETE FROM exercise_notes WHERE exercise_id = ?`, [exerciseId]);
+    return;
+  }
+  await db.runAsync(
+    `INSERT INTO exercise_notes (exercise_id, note, updated_at) VALUES (?, ?, ?)
+     ON CONFLICT(exercise_id) DO UPDATE SET note = excluded.note, updated_at = excluded.updated_at`,
+    [exerciseId, trimmed, Date.now()],
+  );
 }

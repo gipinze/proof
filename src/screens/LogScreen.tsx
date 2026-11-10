@@ -5,7 +5,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { Button, Card, IconButton, Screen } from '../components/ui';
 import { ExercisePicker } from '../components/ExercisePicker';
 import { getExercise, type ExerciseDef } from '../data/exercises';
-import { lastDistanceFor, lastWeightFor, saveLift, saveTemplate, updateLift } from '../db/db';
+import { ExerciseNoteSheet } from '../components/ExerciseNoteSheet';
+import { allExerciseNotes, lastDistanceFor, lastWeightFor, saveLift, saveTemplate, updateLift } from '../db/db';
 import { duration, kgLabel, num, parseTime, timeOfDay } from '../lib/format';
 import { BAR_KG, platesPerSide } from '../lib/plates';
 import { summarizeSets, type SetEntry } from '../lib/volume';
@@ -30,6 +31,8 @@ export function LogScreen({
   const [templateName, setTemplateName] = useState('');
   const [rpeTarget, setRpeTarget] = useState<{ exKey: string; setKey: string } | null>(null);
   const [noteTarget, setNoteTarget] = useState<{ exKey: string; setKey: string } | null>(null);
+  const [exerciseNotes, setExerciseNotes] = useState<Record<string, string>>({});
+  const [noteSheet, setNoteSheet] = useState<{ exerciseId: string; name: string } | null>(null);
   const [noteDraft, setNoteDraft] = useState('');
   const [platesOpen, setPlatesOpen] = useState(false);
   const [plateTarget, setPlateTarget] = useState('100');
@@ -44,6 +47,12 @@ export function LogScreen({
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    allExerciseNotes()
+      .then(setExerciseNotes)
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -390,6 +399,10 @@ export function LogScreen({
                 onUpdateSet={(setKey, patch) => updateSet(block.key, setKey, patch)}
                 onSetRpe={(setKey) => setRpeTarget({ exKey: block.key, setKey })}
                 onEditNote={(setKey) => openNote(block.key, setKey)}
+                preNote={exerciseNotes[block.exerciseId] ?? ''}
+                onEditPreNote={() =>
+                  setNoteSheet({ exerciseId: block.exerciseId, name: getExercise(block.exerciseId).name })
+                }
               />
             ))
           )}
@@ -670,6 +683,22 @@ export function LogScreen({
         </Pressable>
       </Modal>
 
+      <ExerciseNoteSheet
+        visible={noteSheet !== null}
+        exerciseId={noteSheet?.exerciseId ?? null}
+        exerciseName={noteSheet?.name}
+        initial={noteSheet ? exerciseNotes[noteSheet.exerciseId] ?? '' : ''}
+        onClose={() => setNoteSheet(null)}
+        onSaved={(note) =>
+          setExerciseNotes((current) => {
+            const next = { ...current };
+            if (note) next[noteSheet?.exerciseId ?? ''] = note;
+            else delete next[noteSheet?.exerciseId ?? ''];
+            return next;
+          })
+        }
+      />
+
       <ExercisePicker visible={pickerOpen} onClose={() => setPickerOpen(false)} onPick={addExercise} />
     </View>
   );
@@ -684,6 +713,8 @@ function ExerciseBlock({
   onUpdateSet,
   onSetRpe,
   onEditNote,
+  preNote,
+  onEditPreNote,
 }: {
   block: DraftExercise;
   index: number;
@@ -693,6 +724,8 @@ function ExerciseBlock({
   onUpdateSet: (setKey: string, patch: Partial<DraftSet>) => void;
   onSetRpe: (setKey: string) => void;
   onEditNote: (setKey: string) => void;
+  preNote: string;
+  onEditPreNote: () => void;
 }) {
   const exercise = getExercise(block.exerciseId);
   const isDistance = exercise.measure === 'distance';
@@ -748,7 +781,22 @@ function ExerciseBlock({
             {exercise.isUnilateral ? ' · per side' : ''}
             {isDistance ? ' · distance' : ''}
           </Text>
+          {preNote ? (
+            <Pressable onPress={onEditPreNote} hitSlop={6} style={{ flexDirection: 'row', gap: 4, marginTop: 3 }}>
+              <Ionicons name="flag-outline" size={10} color={colors.accentText} style={{ marginTop: 1 }} />
+              <Text style={{ fontSize: 10.5, color: colors.accentText, flex: 1 }} numberOfLines={2}>
+                {preNote}
+              </Text>
+            </Pressable>
+          ) : null}
         </View>
+        <Pressable onPress={onEditPreNote} hitSlop={8} style={{ paddingHorizontal: space(1) }}>
+          <Ionicons
+            name={preNote ? 'flag' : 'flag-outline'}
+            size={14}
+            color={preNote ? colors.accentText : colors.faint}
+          />
+        </Pressable>
         <Text style={{ ...type.caption, color: colors.muted, ...tabular }}>
           {isDistance
             ? `${num(Math.round(totals.distance))} m${totals.seconds > 0 ? ` · ${duration(totals.seconds)}` : ''}`
