@@ -8,7 +8,8 @@ export type Route =
   | { name: 'library' }
   | { name: 'session'; id: number }
   | { name: 'share'; id: number }
-  | { name: 'shareWeek' };
+  | { name: 'shareWeek' }
+  | { name: 'settings' };
 
 export type Nav = {
   push: (route: Route) => void;
@@ -33,6 +34,8 @@ export type DraftSet = {
   time: string;
   /** Optional RPE, as typed (1–10). */
   rpe: string;
+  /** Optional note for this set. */
+  note: string;
 };
 
 export type DraftExercise = { key: string; exerciseId: string; sets: DraftSet[] };
@@ -65,6 +68,7 @@ export function draftToSets(draft: LiftDraft): SetEntry[] {
         distanceM: distance || undefined,
         durationS: parseTime(set.time) || undefined,
         rpe: Number.isFinite(rpe) && rpe > 0 ? Math.min(10, rpe) : undefined,
+        note: set.note.trim() || undefined,
       });
     }
   }

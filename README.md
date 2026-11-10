@@ -9,7 +9,7 @@ The point: you don't need Strava Premium, or any subscription, to post a
 correct-looking training card with a route on it.
 
 ```
-dist\proof-0.7.0.apk
+dist\proof-0.8.0.apk
 ```
 
 | Run card (story, 1080×1920) | Lift card (feed, 1080×1350) |
@@ -21,7 +21,7 @@ dist\proof-0.7.0.apk
 | ![Home](docs/screen-home.png) | ![Session](docs/screen-session-lift.png) | ![Library](docs/screen-library.png) |
 ---
 
-## What v0.7 does
+## What v0.8 does
 
 | Screen | What it does |
 | --- | --- |
@@ -33,6 +33,8 @@ dist\proof-0.7.0.apk
 | **Templates** | Save a session's exercises as "Push A" and start the next one from it, weights pre-filled. Long-press a chip to delete. |
 | **RPE** | Tap the `RPE` badge on a set to record effort 6–10; it follows the set into the history and the card. |
 | **Plate maths** | The calculator in the log header turns “120 kg” into the plates per side of a 20 kg bar. |
+| **Notes** | A document icon on any set records grip, tempo or a twinge; the note follows the set into history and into your backups. |
+| **Backup** | Settings → export the whole database to a JSON file (share sheet or a folder), and restore it later. |
 | **Week recap** | A shareable Monday-to-now card: volume, sessions, distance and the whole week's muscle map. Cards come in a dark or light theme. |
 | **Session** | Full breakdown: volume, sets, an anatomy heatmap of what you trained — or the route. |
 | **Share card** | 9:16 story or 4:5 feed, exported at 1080 px wide, saved to the gallery or sent to any app. |
@@ -120,14 +122,14 @@ outshines the bench press you actually came to do.
 
 <https://github.com/gipinze/proof/releases/latest>
 
-Tap the `proof-0.7.0.apk` asset, then allow "install unknown apps" for your
+Tap the `proof-0.8.0.apk` asset, then allow "install unknown apps" for your
 browser when Android asks. Requires Android 7+ (`minSdkVersion 24`); the APK has
 `arm64-v8a` and `x86_64` binaries.
 
 Other routes:
 
 ```powershell
-adb install -r dist\proof-0.7.0.apk     # phone plugged in, USB debugging on
+adb install -r dist\proof-0.8.0.apk     # phone plugged in, USB debugging on
 npm run apk                             # rebuild the release APK yourself
 ```
 
@@ -257,6 +259,8 @@ The database carries a `user_version` and upgrades in place (`src/db/db.ts`):
 | 3 | `sets.duration_s` — per-set time, for intervals and cardio |
 | 4 | `templates` — saved workouts to start from |
 | 5 | `sets.rpe` — effort per set, optional |
+| 6 | `sets.note` — a line of text per set |
+| 7 | `run_buffer` — fixes collected while the screen is off |
 
 Each is an `ALTER TABLE … ADD COLUMN` guarded by `PRAGMA table_info`, so an
 existing database gains the column without touching a row. Verified twice by
@@ -285,13 +289,13 @@ Rules of thumb:
 
 ---
 
-## Deliberate v0.7 limits
+## Deliberate v0.8 limits
 
 - **Background run tracking is opt-in** (switch on the Run tab). It uses a
-  foreground service and needs “Allow all the time” location; when it is off, or
-  the permission is refused, recording falls back to foreground-only. Verified
-  that the service starts and stops on an emulator, but the actual keep-recording
-  -with-the-screen-off path needs a real device walk.
+  foreground service plus a small SQLite buffer, so fixes collected by the
+  headless task survive until the screen comes back. Verified on an emulator by
+  feeding GPS fixes while the app was backgrounded: 0.67 km recorded from points
+  delivered with the app off-screen.
 - **No history charts yet.** Sessions and per-session breakdown exist; trends do not.
 - **No heart rate / watch sync.** The card shows Sets where Strava shows Avg HR.
 - **Treadmill runs** need manual entry (not implemented yet).

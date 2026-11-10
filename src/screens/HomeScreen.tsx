@@ -111,6 +111,12 @@ export function HomeScreen({
           <Text style={{ ...type.caption, color: colors.muted }}>Tap to change your name</Text>
         </View>
         <IconButton icon="create-outline" onPress={() => setEditing(true)} size={34} bg={colors.surface} />
+        <IconButton
+          icon="settings-outline"
+          onPress={() => nav.push({ name: 'settings' })}
+          size={34}
+          bg={colors.surface}
+        />
       </Pressable>
 
       <Card style={{ marginTop: space(6), padding: space(5) }}>

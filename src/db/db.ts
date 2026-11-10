@@ -27,6 +27,7 @@ export type StoredSet = {
   distance_m: number | null;
   duration_s: number | null;
   rpe: number | null;
+  note: string | null;
   is_warmup: number;
 };
 
@@ -34,7 +35,7 @@ export type StoredSet = {
  * Schema version. Bump this and add a case in `migrate` whenever the shape
  * changes — installed apps upgrade in place and must never lose their data.
  */
-const SCHEMA_VERSION = 5;
+const SCHEMA_VERSION = 7;
 
 let dbPromise: Promise<SQLite.SQLiteDatabase> | null = null;
 
@@ -62,6 +63,7 @@ async function migrate(db: SQLite.SQLiteDatabase, from: number) {
         distance_m REAL,
         duration_s INTEGER,
         rpe REAL,
+        note TEXT,
         is_warmup INTEGER NOT NULL DEFAULT 0
       );
       CREATE INDEX IF NOT EXISTS idx_sets_session ON sets(session_id);
@@ -69,6 +71,13 @@ async function migrate(db: SQLite.SQLiteDatabase, from: number) {
       CREATE TABLE IF NOT EXISTS settings (
         key TEXT PRIMARY KEY,
         value TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS run_buffer (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        lat REAL NOT NULL,
+        lng REAL NOT NULL,
+        t INTEGER NOT NULL,
+        accuracy REAL
       );
       CREATE TABLE IF NOT EXISTS templates (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -84,6 +93,27 @@ async function migrate(db: SQLite.SQLiteDatabase, from: number) {
     const columns = await db.getAllAsync<{ name: string }>(`PRAGMA table_info(sets)`);
     if (!columns.some((c) => c.name === 'distance_m')) {
       await db.execAsync(`ALTER TABLE sets ADD COLUMN distance_m REAL`);
+    }
+  }
+
+  if (from < 7) {
+    // v0.8: locations the background task collects before the screen sees them
+    await db.execAsync(`
+      CREATE TABLE IF NOT EXISTS run_buffer (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        lat REAL NOT NULL,
+        lng REAL NOT NULL,
+        t INTEGER NOT NULL,
+        accuracy REAL
+      );
+    `);
+  }
+
+  if (from < 6) {
+    // v0.8: optional note on a set ("left wrist twinged")
+    const columns = await db.getAllAsync<{ name: string }>(`PRAGMA table_info(sets)`);
+    if (!columns.some((c) => c.name === 'note')) {
+      await db.execAsync(`ALTER TABLE sets ADD COLUMN note TEXT`);
     }
   }
 
@@ -142,8 +172,8 @@ async function insertSets(db: SQLite.SQLiteDatabase, sessionId: number, sets: Se
     const def = getExercise(set.exerciseId);
     const distance = def.measure === 'distance' ? (set.distanceM ?? 0) : null;
     await db.runAsync(
-      `INSERT INTO sets (session_id, exercise_id, ordinal, weight, reps, distance_m, duration_s, rpe, is_warmup)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO sets (session_id, exercise_id, ordinal, weight, reps, distance_m, duration_s, rpe, note, is_warmup)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         sessionId,
         set.exerciseId,
@@ -153,6 +183,7 @@ async function insertSets(db: SQLite.SQLiteDatabase, sessionId: number, sets: Se
         distance,
         def.measure === 'distance' ? (set.durationS ?? null) : null,
         set.rpe ?? null,
+        set.note?.trim() ? set.note.trim() : null,
         set.isWarmup ? 1 : 0,
       ],
     );
@@ -379,11 +410,8 @@ export async function statsSince(fromMs: number): Promise<WeekStats> {
 
 // ----------------------------------------------------------------- progress
 
-/** Epley estimated 1RM on the *total* load (dumbbells already doubled). */
-export function estimate1rm(weight: number, loadFactor: number, reps: number): number {
-  if (weight <= 0 || reps <= 0) return 0;
-  return weight * loadFactor * (1 + reps / 30);
-}
+export { estimate1rm } from '../lib/pr';
+import { estimate1rm, isPersonalRecord } from '../lib/pr';
 
 export type SessionPR = { exerciseId: string; best: number; previous: number; isPR: boolean };
 
@@ -430,7 +458,7 @@ export async function personalRecords(
       .reduce((max, s) => Math.max(max, estimate1rm(s.weight, factor, s.reps)), 0);
     const before = previous.get(id) ?? 0;
     // no history means "first time", not a personal record
-    out.set(id, { exerciseId: id, best, previous: before, isPR: before > 0 && best > before + 0.01 });
+    out.set(id, { exerciseId: id, best, previous: before, isPR: isPersonalRecord(best, before) });
   }
   return out;
 }
@@ -506,7 +534,14 @@ export type TemplateRow = {
 
 export type TemplateExercise = {
   exerciseId: string;
-  sets: { weight: number; reps: number; distanceM?: number; durationS?: number; rpe?: number }[];
+  sets: {
+    weight: number;
+    reps: number;
+    distanceM?: number;
+    durationS?: number;
+    rpe?: number;
+    note?: string;
+  }[];
 };
 
 export async function saveTemplate(name: string, exercises: TemplateExercise[]): Promise<number> {
@@ -608,4 +643,122 @@ export async function weekSummary(fromMs: number): Promise<WeekSummary> {
     loadDistance,
     muscle,
   };
+}
+
+// ----------------------------------------------------------------- backup
+
+export type { Backup, BackupSummary } from '../lib/backup';
+import { describeBackup, type Backup, type BackupSummary } from '../lib/backup';
+
+/** Everything, in one JSON-serialisable object. */
+export async function exportBackup(): Promise<Backup> {
+  const db = await getDb();
+  const [settings, sessions, sets, templates] = await Promise.all([
+    db.getAllAsync<{ key: string; value: string }>(`SELECT key, value FROM settings`),
+    db.getAllAsync<Backup['sessions'][number]>(`SELECT * FROM sessions ORDER BY id`),
+    db.getAllAsync<Backup['sets'][number]>(`SELECT * FROM sets ORDER BY id`),
+    db.getAllAsync<Backup['templates'][number]>(`SELECT * FROM templates ORDER BY id`),
+  ]);
+
+  return {
+    app: 'proof',
+    format: 1,
+    exportedAt: Date.now(),
+    settings,
+    sessions,
+    sets,
+    templates,
+  };
+}
+
+/** Replace everything with the backup, in one transaction. */
+export async function importBackup(backup: Backup): Promise<BackupSummary> {
+  const db = await getDb();
+  const summary = describeBackup(backup);
+
+  await db.withTransactionAsync(async () => {
+    await db.execAsync(`DELETE FROM sets; DELETE FROM sessions; DELETE FROM templates;`);
+
+    for (const session of backup.sessions) {
+      await db.runAsync(
+        `INSERT INTO sessions (id, kind, title, started_at, ended_at, duration_s, distance_m, track, notes)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          session.id,
+          session.kind,
+          session.title,
+          session.started_at,
+          session.ended_at,
+          session.duration_s ?? null,
+          session.distance_m ?? null,
+          session.track ?? null,
+          session.notes ?? null,
+        ],
+      );
+    }
+
+    for (const set of backup.sets) {
+      await db.runAsync(
+        `INSERT INTO sets (id, session_id, exercise_id, ordinal, weight, reps, distance_m, duration_s, rpe, note, is_warmup)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          set.id,
+          set.session_id,
+          set.exercise_id,
+          set.ordinal,
+          set.weight,
+          set.reps,
+          set.distance_m ?? null,
+          set.duration_s ?? null,
+          set.rpe ?? null,
+          set.note ?? null,
+          set.is_warmup ?? 0,
+        ],
+      );
+    }
+
+    for (const template of backup.templates ?? []) {
+      await db.runAsync(
+        `INSERT INTO templates (id, name, created_at, body) VALUES (?, ?, ?, ?)`,
+        [template.id, template.name, template.created_at, template.body],
+      );
+    }
+
+    await db.execAsync(`DELETE FROM settings`);
+    for (const row of backup.settings ?? []) {
+      await db.runAsync(`INSERT INTO settings (key, value) VALUES (?, ?)`, [row.key, row.value]);
+    }
+  });
+
+  return summary;
+}
+
+
+// ------------------------------------------------------- background run buffer
+
+export type BufferedPoint = { lat: number; lng: number; t: number; accuracy: number | null };
+
+/**
+ * The background location task can run in its own JS context, where the Run
+ * screen's in-memory listener does not exist. Fixes are written here first, and
+ * the screen drains the buffer whenever it is (re)foregrounded.
+ */
+export async function bufferPoint(point: BufferedPoint): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(`INSERT INTO run_buffer (lat, lng, t, accuracy) VALUES (?, ?, ?, ?)`, [
+    point.lat,
+    point.lng,
+    point.t,
+    point.accuracy,
+  ]);
+}
+
+export async function readBufferedPoints(): Promise<BufferedPoint[]> {
+  const db = await getDb();
+  return db.getAllAsync<BufferedPoint>(`SELECT lat, lng, t, accuracy FROM run_buffer ORDER BY t ASC`);
+}
+
+export async function clearBufferedPoints(): Promise<void> {
+  const db = await getDb();
+  await db.execAsync(`DELETE FROM run_buffer`);
 }

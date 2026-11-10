@@ -12,6 +12,8 @@ export type SetEntry = {
   durationS?: number;
   /** Rate of perceived exertion, 1–10. */
   rpe?: number;
+  /** Free text about this set. */
+  note?: string;
   isWarmup?: boolean;
 };
 

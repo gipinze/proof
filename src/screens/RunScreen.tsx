@@ -6,7 +6,7 @@ import { useKeepAwake } from 'expo-keep-awake';
 import { Ionicons } from '@expo/vector-icons';
 import { Button, Chip, Screen, Stat } from '../components/ui';
 import { RouteMap } from '../components/RouteMap';
-import { saveRun } from '../db/db';
+import { clearBufferedPoints, readBufferedPoints, saveRun } from '../db/db';
 import { pickGpx } from '../lib/gpx';
 import { duration, km, pace, paceFrom, timeOfDay } from '../lib/format';
 import { haversine, simplifyTrack, trackDistance, type TrackPoint } from '../lib/geo';
@@ -93,6 +93,35 @@ export function RunScreen({ nav }: { nav: Nav }) {
     setBackgroundListener(onPosition);
     return () => setBackgroundListener(null);
   }, [onPosition]);
+
+  /** Pull in anything the headless task buffered while the app was away. */
+  const drainBuffer = useCallback(async () => {
+    const pending = await readBufferedPoints().catch(() => []);
+    if (pending.length === 0) return;
+    await clearBufferedPoints().catch(() => {});
+
+    const merged = [...pointsRef.current];
+    const seen = new Set(merged.map((p) => p.t));
+    for (const point of pending) {
+      if (seen.has(point.t)) continue;
+      merged.push({ lat: point.lat, lng: point.lng, t: point.t });
+      seen.add(point.t);
+    }
+    merged.sort((a, b) => a.t - b.t);
+    pointsRef.current = merged;
+    setPoints(merged);
+    if (merged.length > 0) setGpsStatus('ok');
+  }, []);
+
+  // while a run is going, keep draining: the task may have run elsewhere
+  useEffect(() => {
+    if (phase !== 'running') return;
+    drainBuffer().catch(() => {});
+    const id = setInterval(() => {
+      drainBuffer().catch(() => {});
+    }, 4000);
+    return () => clearInterval(id);
+  }, [phase, drainBuffer]);
 
   /**
    * Foreground watching is the default. With the switch on, updates come from
@@ -214,6 +243,7 @@ export function RunScreen({ nav }: { nav: Nav }) {
     setPermission('granted');
     pointsRef.current = [];
     setPoints([]);
+    await clearBufferedPoints().catch(() => {});
     setElapsed(0);
     startedAtRef.current = Date.now();
     pausedTotalRef.current = 0;

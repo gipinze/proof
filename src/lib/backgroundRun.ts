@@ -1,5 +1,6 @@
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
+import { bufferPoint } from '../db/db';
 
 /**
  * Background run recording.
@@ -32,7 +33,19 @@ if (!TaskManager.isTaskDefined(BACKGROUND_TASK)) {
     if (error) return;
     const locations = (data as { locations?: Location.LocationObject[] } | undefined)?.locations;
     if (!locations?.length) return;
-    for (const location of locations) listener?.(location);
+
+    for (const location of locations) {
+      // Persist first: this context may be a headless one, where the screen's
+      // listener does not exist. The screen drains the buffer when it returns.
+      await bufferPoint({
+        lat: location.coords.latitude,
+        lng: location.coords.longitude,
+        t: location.timestamp,
+        accuracy: location.coords.accuracy ?? null,
+      }).catch(() => {});
+
+      listener?.(location);
+    }
   });
 }
 

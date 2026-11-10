@@ -297,6 +297,18 @@ export function SessionScreen({ nav, sessionId }: { nav: Nav; sessionId: number 
                       </View>
                     ))}
                   </View>
+
+                  {list.some((s) => s.note) ? (
+                    <View style={{ marginTop: space(2.5), gap: 3 }}>
+                      {list.map((s, i) =>
+                        s.note ? (
+                          <Text key={s.id} style={{ ...type.tiny, color: colors.muted }}>
+                            {i + 1} · {s.note}
+                          </Text>
+                        ) : null,
+                      )}
+                    </View>
+                  ) : null}
                 </Card>
               );
             })}

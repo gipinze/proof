@@ -1,6 +1,6 @@
 {
   "name": "proof",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "private": true,
   "main": "index.ts",
   "scripts": {
@@ -11,7 +11,8 @@
     "sync": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/sync-mirror.ps1",
     "prebuild": "expo prebuild --platform android --clean",
     "apk": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run-android.ps1 -Release -NoLaunch",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node scripts/run-tests.mjs"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.2",

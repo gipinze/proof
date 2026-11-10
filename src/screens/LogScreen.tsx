@@ -7,6 +7,7 @@ import { ExercisePicker } from '../components/ExercisePicker';
 import { getExercise, type ExerciseDef } from '../data/exercises';
 import { lastDistanceFor, lastWeightFor, saveLift, saveTemplate, updateLift } from '../db/db';
 import { duration, kgLabel, num, parseTime, timeOfDay } from '../lib/format';
+import { BAR_KG, platesPerSide } from '../lib/plates';
 import { summarizeSets, type SetEntry } from '../lib/volume';
 import { draftToSets, newKey, type DraftExercise, type DraftSet, type LiftDraft, type Nav } from '../nav';
 import { colors, radius, space, tabular, type } from '../theme';
@@ -28,6 +29,8 @@ export function LogScreen({
   const [templateOpen, setTemplateOpen] = useState(false);
   const [templateName, setTemplateName] = useState('');
   const [rpeTarget, setRpeTarget] = useState<{ exKey: string; setKey: string } | null>(null);
+  const [noteTarget, setNoteTarget] = useState<{ exKey: string; setKey: string } | null>(null);
+  const [noteDraft, setNoteDraft] = useState('');
   const [platesOpen, setPlatesOpen] = useState(false);
   const [plateTarget, setPlateTarget] = useState('100');
   const BAR_KG = 20;
@@ -93,6 +96,7 @@ export function LogScreen({
                 distance: String(prevDistance ?? (isDistance ? 20 : 0)),
                 time: '',
                 rpe: '',
+                note: '',
               },
             ],
           },
@@ -115,6 +119,14 @@ export function LogScreen({
 
   const startRest = () => setRestLeft(REST_MS);
 
+  /** Long-press a set to jot something down about it. */
+  const openNote = (exKey: string, setKey: string) => {
+    const block = draft.exercises.find((b) => b.key === exKey);
+    const set = block?.sets.find((s) => s.key === setKey);
+    setNoteDraft(set?.note ?? '');
+    setNoteTarget({ exKey, setKey });
+  };
+
   const addSet = (exKey: string) => {
     startRest();
     setDraft((d) => ({
@@ -133,6 +145,7 @@ export function LogScreen({
               distance: last?.distance ?? '20',
               time: last?.time ?? '',
               rpe: last?.rpe ?? '',
+              note: '',
             },
           ],
         };
@@ -167,6 +180,7 @@ export function LogScreen({
         distanceM: Number.parseFloat(s.distance.replace(',', '.')) || undefined,
         durationS: parseTime(s.time) || undefined,
         rpe: Number.parseFloat(s.rpe) || undefined,
+        note: s.note.trim() || undefined,
       })),
     }));
     await saveTemplate(name, exercises);
@@ -373,6 +387,7 @@ export function LogScreen({
                 onRemoveSet={(setKey) => removeSet(block.key, setKey)}
                 onUpdateSet={(setKey, patch) => updateSet(block.key, setKey, patch)}
                 onSetRpe={(setKey) => setRpeTarget({ exKey: block.key, setKey })}
+                onEditNote={(setKey) => openNote(block.key, setKey)}
               />
             ))
           )}
@@ -457,16 +472,7 @@ export function LogScreen({
             />
             {(() => {
               const target = Number.parseFloat(plateTarget.replace(',', '.')) || 0;
-              const perSide = Math.max(0, (target - BAR_KG) / 2);
-              const sizes = [25, 20, 15, 10, 5, 2.5, 1.25];
-              let left = perSide;
-              const plates: number[] = [];
-              for (const size of sizes) {
-                while (left + 0.001 >= size) {
-                  plates.push(size);
-                  left -= size;
-                }
-              }
+              const { plates, leftover } = platesPerSide(target, BAR_KG);
               return (
                 <View style={{ marginTop: space(4) }}>
                   <Text style={{ ...type.tiny, color: colors.faint }}>PER SIDE</Text>
@@ -493,15 +499,75 @@ export function LogScreen({
                       ))
                     )}
                   </View>
-                  {left > 0.01 ? (
+                  {leftover > 0 ? (
                     <Text style={{ ...type.tiny, color: colors.muted, marginTop: space(2) }}>
-                      {left.toFixed(2)} kg per side can’t be made with standard plates.
+                      {leftover.toFixed(2)} kg per side can’t be made with standard plates.
                     </Text>
                   ) : null}
                 </View>
               );
             })()}
             <Button label="Done" onPress={() => setPlatesOpen(false)} style={{ marginTop: space(4) }} />
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal
+        visible={noteTarget !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setNoteTarget(null)}
+      >
+        <Pressable
+          style={{ flex: 1, backgroundColor: '#000000AA', justifyContent: 'center', padding: space(6) }}
+          onPress={() => setNoteTarget(null)}
+        >
+          <Pressable style={{ backgroundColor: colors.surface, borderRadius: radius.lg, padding: space(5) }}>
+            <Text style={{ ...type.title, color: colors.text }}>Note for this set</Text>
+            <Text style={{ ...type.caption, color: colors.muted, marginTop: 4 }}>
+              Grip, tempo, a twinge — anything you want to remember next time.
+            </Text>
+            <TextInput
+              value={noteDraft}
+              onChangeText={setNoteDraft}
+              autoFocus
+              multiline
+              placeholder="Thumb tape slipped on rep 4"
+              placeholderTextColor={colors.faint}
+              style={{
+                marginTop: space(4),
+                minHeight: 84,
+                textAlignVertical: 'top',
+                backgroundColor: colors.surfaceAlt,
+                borderRadius: radius.md,
+                paddingHorizontal: space(4),
+                paddingVertical: 12,
+                color: colors.text,
+                fontSize: 15,
+                fontWeight: '500',
+              }}
+            />
+            <View style={{ flexDirection: 'row', gap: space(3), marginTop: space(4) }}>
+              <Button
+                label="Clear"
+                variant="ghost"
+                onPress={() => {
+                  if (!noteTarget) return;
+                  updateSet(noteTarget.exKey, noteTarget.setKey, { note: '' });
+                  setNoteTarget(null);
+                }}
+                style={{ flex: 1 }}
+              />
+              <Button
+                label="Save"
+                onPress={() => {
+                  if (!noteTarget) return;
+                  updateSet(noteTarget.exKey, noteTarget.setKey, { note: noteDraft.trim() });
+                  setNoteTarget(null);
+                }}
+                style={{ flex: 1 }}
+              />
+            </View>
           </Pressable>
         </Pressable>
       </Modal>
@@ -615,6 +681,7 @@ function ExerciseBlock({
   onRemoveExercise,
   onUpdateSet,
   onSetRpe,
+  onEditNote,
 }: {
   block: DraftExercise;
   index: number;
@@ -623,6 +690,7 @@ function ExerciseBlock({
   onRemoveExercise: () => void;
   onUpdateSet: (setKey: string, patch: Partial<DraftSet>) => void;
   onSetRpe: (setKey: string) => void;
+  onEditNote: (setKey: string) => void;
 }) {
   const exercise = getExercise(block.exerciseId);
   const isDistance = exercise.measure === 'distance';
@@ -731,11 +799,16 @@ function ExerciseBlock({
           const setLoadDistance = w * exercise.loadFactor * d;
 
           return (
-            <View
+            <Pressable
               key={set.key}
+              onLongPress={() => onEditNote(set.key)}
+              delayLongPress={350}
               style={{ flexDirection: 'row', alignItems: 'center', gap: space(2), marginTop: space(2) }}
             >
-              <Text style={{ ...type.caption, color: colors.muted, width: 22, ...tabular }}>{i + 1}</Text>
+              <View style={{ width: 26, flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                <Text style={{ ...type.caption, color: colors.muted, ...tabular }}>{i + 1}</Text>
+                {set.note ? <Ionicons name="document-text" size={10} color={colors.accentText} /> : null}
+              </View>
 
               {isDistance ? (
                 <>
@@ -819,10 +892,17 @@ function ExerciseBlock({
                 </>
               )}
 
+              <Pressable onPress={() => onEditNote(set.key)} hitSlop={8} style={{ width: 16, alignItems: 'center' }}>
+                <Ionicons
+                  name={set.note ? 'document-text' : 'document-text-outline'}
+                  size={13}
+                  color={set.note ? colors.accentText : colors.faint}
+                />
+              </Pressable>
               <Pressable onPress={() => onRemoveSet(set.key)} hitSlop={10} style={{ width: 15 }}>
                 <Ionicons name="close" size={15} color={colors.faint} />
               </Pressable>
-            </View>
+            </Pressable>
           );
         })}
 
