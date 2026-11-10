@@ -26,6 +26,7 @@ export type StoredSet = {
   reps: number;
   distance_m: number | null;
   duration_s: number | null;
+  rpe: number | null;
   is_warmup: number;
 };
 
@@ -33,7 +34,7 @@ export type StoredSet = {
  * Schema version. Bump this and add a case in `migrate` whenever the shape
  * changes — installed apps upgrade in place and must never lose their data.
  */
-const SCHEMA_VERSION = 4;
+const SCHEMA_VERSION = 5;
 
 let dbPromise: Promise<SQLite.SQLiteDatabase> | null = null;
 
@@ -60,6 +61,7 @@ async function migrate(db: SQLite.SQLiteDatabase, from: number) {
         reps INTEGER NOT NULL,
         distance_m REAL,
         duration_s INTEGER,
+        rpe REAL,
         is_warmup INTEGER NOT NULL DEFAULT 0
       );
       CREATE INDEX IF NOT EXISTS idx_sets_session ON sets(session_id);
@@ -82,6 +84,14 @@ async function migrate(db: SQLite.SQLiteDatabase, from: number) {
     const columns = await db.getAllAsync<{ name: string }>(`PRAGMA table_info(sets)`);
     if (!columns.some((c) => c.name === 'distance_m')) {
       await db.execAsync(`ALTER TABLE sets ADD COLUMN distance_m REAL`);
+    }
+  }
+
+  if (from < 5) {
+    // v0.6: optional RPE per set
+    const columns = await db.getAllAsync<{ name: string }>(`PRAGMA table_info(sets)`);
+    if (!columns.some((c) => c.name === 'rpe')) {
+      await db.execAsync(`ALTER TABLE sets ADD COLUMN rpe REAL`);
     }
   }
 
@@ -132,8 +142,8 @@ async function insertSets(db: SQLite.SQLiteDatabase, sessionId: number, sets: Se
     const def = getExercise(set.exerciseId);
     const distance = def.measure === 'distance' ? (set.distanceM ?? 0) : null;
     await db.runAsync(
-      `INSERT INTO sets (session_id, exercise_id, ordinal, weight, reps, distance_m, duration_s, is_warmup)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO sets (session_id, exercise_id, ordinal, weight, reps, distance_m, duration_s, rpe, is_warmup)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         sessionId,
         set.exerciseId,
@@ -142,6 +152,7 @@ async function insertSets(db: SQLite.SQLiteDatabase, sessionId: number, sets: Se
         def.measure === 'distance' ? 0 : set.reps,
         distance,
         def.measure === 'distance' ? (set.durationS ?? null) : null,
+        set.rpe ?? null,
         set.isWarmup ? 1 : 0,
       ],
     );
@@ -292,9 +303,10 @@ export async function listSessionSummaries(limit = 40): Promise<SessionListItem[
     reps: number;
     distance_m: number | null;
     duration_s: number | null;
+    rpe: number | null;
     is_warmup: number;
   }>(
-    `SELECT session_id, exercise_id, weight, reps, distance_m, duration_s, is_warmup FROM sets WHERE session_id IN (${placeholders})`,
+    `SELECT session_id, exercise_id, weight, reps, distance_m, duration_s, rpe, is_warmup FROM sets WHERE session_id IN (${placeholders})`,
     ids,
   );
 
@@ -339,9 +351,10 @@ export async function statsSince(fromMs: number): Promise<WeekStats> {
     reps: number;
     distance_m: number | null;
     duration_s: number | null;
+    rpe: number | null;
     is_warmup: number;
   }>(
-    `SELECT s.exercise_id, s.weight, s.reps, s.distance_m, s.duration_s, s.is_warmup
+    `SELECT s.exercise_id, s.weight, s.reps, s.distance_m, s.duration_s, s.rpe, s.is_warmup
        FROM sets s JOIN sessions ss ON ss.id = s.session_id
       WHERE ss.started_at >= ?`,
     [fromMs],
@@ -493,7 +506,7 @@ export type TemplateRow = {
 
 export type TemplateExercise = {
   exerciseId: string;
-  sets: { weight: number; reps: number; distanceM?: number; durationS?: number }[];
+  sets: { weight: number; reps: number; distanceM?: number; durationS?: number; rpe?: number }[];
 };
 
 export async function saveTemplate(name: string, exercises: TemplateExercise[]): Promise<number> {

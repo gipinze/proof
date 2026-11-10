@@ -2,7 +2,14 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, ScrollView, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Button, Chip, IconButton, TOP_INSET } from '../components/ui';
-import { CARD_WIDTH, ShareCard, cardHeight, type CardFormat, type CardModel } from '../components/ShareCard';
+import {
+  CARD_WIDTH,
+  ShareCard,
+  cardHeight,
+  type CardFormat,
+  type CardModel,
+  type CardTheme,
+} from '../components/ShareCard';
 import { weekSummary, type WeekSummary } from '../db/db';
 import { fullDate, km, num } from '../lib/format';
 import { captureCard, cardFilename, nameCard, saveToGallery, shareImage } from '../lib/share';
@@ -21,6 +28,7 @@ function startOfWeek(): number {
 export function ShareWeekScreen({ nav, athlete }: { nav: Nav; athlete: string }) {
   const [summary, setSummary] = useState<WeekSummary | null>(null);
   const [format, setFormat] = useState<CardFormat>('story');
+  const [theme, setTheme] = useState<CardTheme>('dark');
   const [busy, setBusy] = useState<'save' | 'share' | null>(null);
   const cardRef = useRef<React.ComponentRef<typeof View>>(null);
 
@@ -48,8 +56,9 @@ export function ShareWeekScreen({ nav, athlete }: { nav: Nav; athlete: string })
       caption: summary.loadDistance > 0 ? `${num(Math.round(summary.loadDistance))} kg·m carried` : null,
       load: normalisedLoad(summary.muscle as never),
       format,
+      theme,
     };
-  }, [summary, athlete, format]);
+  }, [summary, athlete, format, theme]);
 
   const capture = async () => {
     if (!cardRef.current) throw new Error('Card is not ready yet');
@@ -108,6 +117,9 @@ export function ShareWeekScreen({ nav, athlete }: { nav: Nav; athlete: string })
         <View style={{ flexDirection: 'row', gap: space(2) }}>
           <Chip label="Story 9:16" active={format === 'story'} onPress={() => setFormat('story')} />
           <Chip label="Feed 4:5" active={format === 'feed'} onPress={() => setFormat('feed')} />
+          <View style={{ flex: 1 }} />
+          <Chip label="Dark" active={theme === 'dark'} onPress={() => setTheme('dark')} />
+          <Chip label="Light" active={theme === 'light'} onPress={() => setTheme('light')} />
         </View>
 
         <View style={{ alignItems: 'center', marginTop: space(4) }}>

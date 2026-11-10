@@ -1,7 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, ScrollView, Text, View } from 'react-native';
 import { Button, Chip, IconButton, TOP_INSET } from '../components/ui';
-import { CARD_WIDTH, ShareCard, cardHeight, type CardFormat, type CardModel } from '../components/ShareCard';
+import {
+  CARD_WIDTH,
+  ShareCard,
+  cardHeight,
+  type CardFormat,
+  type CardModel,
+  type CardTheme,
+} from '../components/ShareCard';
 import { getSession, getSessionSets, personalRecords, type SessionRow } from '../db/db';
 import { duration, durationLong, fullDate, km, num, pace, paceFrom } from '../lib/format';
 import { captureCard, cardFilename, nameCard, saveToGallery, shareImage } from '../lib/share';
@@ -22,6 +29,7 @@ export function ShareScreen({
   const [session, setSession] = useState<SessionRow | null>(null);
   const [sets, setSets] = useState<SetEntry[]>([]);
   const [format, setFormat] = useState<CardFormat>('story');
+  const [theme, setTheme] = useState<CardTheme>('dark');
   const [busy, setBusy] = useState<'save' | 'share' | null>(null);
   const [prCount, setPrCount] = useState(0);
   const cardRef = useRef<React.ComponentRef<typeof View>>(null);
@@ -76,6 +84,7 @@ export function ShareScreen({
         caption: 'Recorded on this phone · no cloud',
         track,
         format,
+        theme,
       };
     }
 
@@ -113,8 +122,9 @@ export function ShareScreen({
       }${prCount > 0 ? ` · ${prCount} PR` : ''}`,
       load: normalisedLoad(muscleLoad(sets)),
       format,
+      theme,
     };
-  }, [session, sets, format, athlete]);
+  }, [session, sets, format, theme, athlete]);
 
   const capture = async () => {
     if (!cardRef.current) throw new Error('Card is not ready yet');
@@ -175,6 +185,9 @@ export function ShareScreen({
         <View style={{ flexDirection: 'row', gap: space(2) }}>
           <Chip label="Story 9:16" active={format === 'story'} onPress={() => setFormat('story')} />
           <Chip label="Feed 4:5" active={format === 'feed'} onPress={() => setFormat('feed')} />
+          <View style={{ flex: 1 }} />
+          <Chip label="Dark" active={theme === 'dark'} onPress={() => setTheme('dark')} />
+          <Chip label="Light" active={theme === 'light'} onPress={() => setTheme('light')} />
         </View>
 
         <View style={{ alignItems: 'center', marginTop: space(4) }}>

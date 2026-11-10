@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Alert, Pressable, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { HomeScreen } from './src/screens/HomeScreen';
@@ -56,6 +56,7 @@ export default function App() {
           reps: String(set.reps || 8),
           distance: String(set.distance_m ?? 0),
           time: set.duration_s ? duration(set.duration_s) : '',
+          rpe: set.rpe ? String(set.rpe) : '',
         };
         if (last && last.exerciseId === set.exercise_id) last.sets.push(draftSet);
         else exercises.push({ key: newKey(), exerciseId: set.exercise_id, sets: [draftSet] });
@@ -84,6 +85,7 @@ export default function App() {
         reps: String(s.reps || 8),
         distance: String(s.distanceM ?? 0),
         time: s.durationS ? duration(s.durationS) : '',
+        rpe: s.rpe ? String(s.rpe) : '',
       })),
     }));
     setDraft({ startedAt: Date.now(), title: row.name, exercises });
@@ -96,10 +98,14 @@ export default function App() {
     reset: (route) =>
       setStack((s) => (route.name === 'home' ? [{ name: 'home' }] : [...s.slice(0, 1), route])),
     editSession: (id) => {
-      editSession(id).catch(() => {});
+      editSession(id).catch((err) => {
+        Alert.alert('Could not open the editor', err instanceof Error ? err.message : String(err));
+      });
     },
     startTemplate: (id) => {
-      startTemplate(id).catch(() => {});
+      startTemplate(id).catch((err) => {
+        Alert.alert('Could not start that template', err instanceof Error ? err.message : String(err));
+      });
     },
     bump,
     dataVersion,
@@ -125,6 +131,7 @@ export default function App() {
               reps: '8',
               distance: isDistance ? '20' : '0',
               time: '',
+              rpe: '',
             },
           ],
         },

@@ -9,7 +9,7 @@ The point: you don't need Strava Premium, or any subscription, to post a
 correct-looking training card with a route on it.
 
 ```
-dist\proof-0.5.0.apk
+dist\proof-0.6.0.apk
 ```
 
 | Run card (story, 1080×1920) | Lift card (feed, 1080×1350) |
@@ -21,17 +21,18 @@ dist\proof-0.5.0.apk
 | ![Home](docs/screen-home.png) | ![Session](docs/screen-session-lift.png) | ![Library](docs/screen-library.png) |
 ---
 
-## What v0.5 does
+## What v0.6 does
 
 | Screen | What it does |
 | --- | --- |
 | **Home** | This week's volume, sessions and distance; recent activity; your name (used on cards). |
 | **Log a lift** | Search 100+ exercises, add sets (weight × reps), live total volume, finish → saved session. |
-| **Run** | GPS recording: live distance / pace / time and the route drawing itself. Pause, resume, finish. Optional foreground service keeps recording with the screen off. |
+| **Run** | GPS recording: live distance / pace / time and the route drawing itself. Pause, resume, finish. Optional foreground service keeps recording with the screen off. Import a `.gpx` from any watch, or log a treadmill run by hand. |
 | **Library** | Every exercise with its muscle map — front and back, primary vs secondary. |
 | **Progress** | Home charts: volume for the last six weeks, and the muscles you actually hit this week. |
 | **Templates** | Save a session's exercises as "Push A" and start the next one from it, weights pre-filled. Long-press a chip to delete. |
-| **Week recap** | A shareable Monday-to-now card: volume, sessions, distance and the whole week's muscle map. |
+| **RPE** | Tap the `RPE` badge on a set to record effort 6–10; it follows the set into the history and the card. |
+| **Week recap** | A shareable Monday-to-now card: volume, sessions, distance and the whole week's muscle map. Cards come in a dark or light theme. |
 | **Session** | Full breakdown: volume, sets, an anatomy heatmap of what you trained — or the route. |
 | **Share card** | 9:16 story or 4:5 feed, exported at 1080 px wide, saved to the gallery or sent to any app. |
 
@@ -118,14 +119,14 @@ outshines the bench press you actually came to do.
 
 <https://github.com/gipinze/proof/releases/latest>
 
-Tap the `proof-0.5.0.apk` asset, then allow "install unknown apps" for your
+Tap the `proof-0.6.0.apk` asset, then allow "install unknown apps" for your
 browser when Android asks. Requires Android 7+ (`minSdkVersion 24`); the APK has
 `arm64-v8a` and `x86_64` binaries.
 
 Other routes:
 
 ```powershell
-adb install -r dist\proof-0.5.0.apk     # phone plugged in, USB debugging on
+adb install -r dist\proof-0.6.0.apk     # phone plugged in, USB debugging on
 npm run apk                             # rebuild the release APK yourself
 ```
 
@@ -253,6 +254,8 @@ The database carries a `user_version` and upgrades in place (`src/db/db.ts`):
 | --- | --- |
 | 2 | `sets.distance_m` — carries, sleds and cardio measured in metres |
 | 3 | `sets.duration_s` — per-set time, for intervals and cardio |
+| 4 | `templates` — saved workouts to start from |
+| 5 | `sets.rpe` — effort per set, optional |
 
 Each is an `ALTER TABLE … ADD COLUMN` guarded by `PRAGMA table_info`, so an
 existing database gains the column without touching a row. Verified twice by
@@ -281,7 +284,7 @@ Rules of thumb:
 
 ---
 
-## Deliberate v0.5 limits
+## Deliberate v0.6 limits
 
 - **Background run tracking is opt-in** (switch on the Run tab). It uses a
   foreground service and needs “Allow all the time” location; when it is off, or
@@ -308,9 +311,8 @@ Rules of thumb:
 4. **PR detection** — best e1RM per exercise (Epley), PR badges on the card.
 5. **Split history charts** — volume per muscle group per week; spot what you skip.
 6. **Templates** — "Push A" that pre-fills exercises and last-used weights.
-7. **Import** — GPX/FIT in, so runs recorded elsewhere still get a card.
 8. **Weekly recap card** — the 7-day summary as its own story.
-9. **Rest timer + RPE**, per-set notes.
+7. **Per-set notes** and a plate calculator.
 10. **Bodyweight mode** — reps-based volume for calisthenics.
 
 ---
@@ -319,7 +321,7 @@ Rules of thumb:
 
 Two older projects were reviewed:
 
-**`F:\AI Code Claude\Personal\Exercise Analyzer`** — a desktop Streamlit app for
+**`Exercise Analyzer`** (sibling project) — a desktop Streamlit app for
 pose-based form analysis (MediaPipe/RTMPose keypoints, rep state machine, rules
 for depth/torso-lean/valgus/tempo, SQLite history, self-contained HTML reports).
 
@@ -330,7 +332,7 @@ for depth/torso-lean/valgus/tempo, SQLite history, self-contained HTML reports).
 - **Not reused:** it has **no exercise→muscle mapping at all** — I searched every
   file in it — and its MediaPipe/OpenCV/Streamlit stack is desktop Python.
 
-**`F:\AI Code Claude\Personal\TrainHeroic clone`** — this is where the muscle
+**`TrainHeroic clone`** (sibling project) — this is where the muscle
 work actually lives: `exercise-enrichment.sql` assigns `worked_muscles`,
 `secondary_muscles`, `muscle_group` and `equipment` to **1,927 exercises**,
 generated by a local `qwen2.5:14b` run on 2026-09-13. Seventeen muscle labels:

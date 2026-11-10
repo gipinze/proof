@@ -1,12 +1,13 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Pressable, Switch, Text, useWindowDimensions, View } from 'react-native';
+import { Alert, Modal, Pressable, Switch, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import * as Location from 'expo-location';
 import * as Haptics from 'expo-haptics';
 import { useKeepAwake } from 'expo-keep-awake';
 import { Ionicons } from '@expo/vector-icons';
-import { Button, Screen, Stat } from '../components/ui';
+import { Button, Chip, Screen, Stat } from '../components/ui';
 import { RouteMap } from '../components/RouteMap';
 import { saveRun } from '../db/db';
+import { pickGpx } from '../lib/gpx';
 import { duration, km, pace, paceFrom, timeOfDay } from '../lib/format';
 import { haversine, simplifyTrack, trackDistance, type TrackPoint } from '../lib/geo';
 import {
@@ -32,6 +33,10 @@ export function RunScreen({ nav }: { nav: Nav }) {
   const [gpsStatus, setGpsStatus] = useState<'waiting' | 'ok'>('waiting');
   /** Opt-in: keep recording with a foreground service when the screen locks. */
   const [useBackground, setUseBackground] = useState(false);
+  const [manualOpen, setManualOpen] = useState(false);
+  const [manualKm, setManualKm] = useState('5');
+  const [manualTime, setManualTime] = useState('30:00');
+  const [importing, setImporting] = useState(false);
 
   const startedAtRef = useRef(0);
   const pausedAtRef = useRef<number | null>(null);
@@ -146,6 +151,53 @@ export function RunScreen({ nav }: { nav: Nav }) {
         'GPS could not start',
         err instanceof Error ? err.message : 'The location service refused to start.',
       );
+    }
+  };
+
+  const saveManualRun = async () => {
+    const kmValue = Number.parseFloat(manualKm.replace(',', '.'));
+    const bits = manualTime.split(':').map((b) => Number.parseInt(b, 10) || 0);
+    const seconds =
+      bits.length === 3
+        ? bits[0] * 3600 + bits[1] * 60 + bits[2]
+        : bits.length === 2
+          ? bits[0] * 60 + bits[1]
+          : bits[0] ?? 0;
+    if (!(kmValue > 0) || !(seconds > 0)) {
+      Alert.alert('Check the numbers', 'Distance and time both need a positive value.');
+      return;
+    }
+    const endedAt = Date.now();
+    const id = await saveRun({
+      title: 'Treadmill Run',
+      startedAt: endedAt - seconds * 1000,
+      endedAt,
+      distanceM: kmValue * 1000,
+      track: [],
+    });
+    setManualOpen(false);
+    nav.bump();
+    nav.push({ name: 'session', id });
+  };
+
+  const importGpxRun = async () => {
+    setImporting(true);
+    try {
+      const file = await pickGpx();
+      if (!file) return;
+      const id = await saveRun({
+        title: file.name,
+        startedAt: file.startedAt,
+        endedAt: file.endedAt,
+        distanceM: file.distanceM,
+        track: file.simplified,
+      });
+      nav.bump();
+      nav.push({ name: 'session', id });
+    } catch (err) {
+      Alert.alert('Import failed', err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setImporting(false);
     }
   };
 
@@ -321,6 +373,24 @@ export function RunScreen({ nav }: { nav: Nav }) {
               />
             </View>
 
+            <View style={{ flexDirection: 'row', gap: space(2), marginTop: space(3) }}>
+              <Button
+                label={importing ? 'Importing…' : 'Import GPX'}
+                icon="document-attach-outline"
+                variant="surface"
+                onPress={importGpxRun}
+                loading={importing}
+                style={{ flex: 1 }}
+              />
+              <Button
+                label="Log manually"
+                icon="create-outline"
+                variant="surface"
+                onPress={() => setManualOpen(true)}
+                style={{ flex: 1 }}
+              />
+            </View>
+
             <Pressable
               onPress={start}
               style={({ pressed }) => ({
@@ -376,6 +446,64 @@ export function RunScreen({ nav }: { nav: Nav }) {
           RECORDING · {points.length} POINTS
         </Text>
       ) : null}
+
+      <Modal
+        visible={manualOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setManualOpen(false)}
+      >
+        <Pressable
+          style={{ flex: 1, backgroundColor: '#000000AA', justifyContent: 'center', padding: space(6) }}
+          onPress={() => setManualOpen(false)}
+        >
+          <Pressable style={{ backgroundColor: colors.surface, borderRadius: radius.lg, padding: space(5) }}>
+            <Text style={{ ...type.title, color: colors.text }}>Log a run by hand</Text>
+            <Text style={{ ...type.caption, color: colors.muted, marginTop: 4 }}>
+              For a treadmill or a watch that will not export. No route, but it still counts.
+            </Text>
+
+            <Text style={{ ...type.tiny, color: colors.faint, marginTop: space(4) }}>DISTANCE (KM)</Text>
+            <TextInput
+              value={manualKm}
+              onChangeText={setManualKm}
+              keyboardType="decimal-pad"
+              style={{
+                marginTop: 6,
+                backgroundColor: colors.surfaceAlt,
+                borderRadius: radius.md,
+                paddingHorizontal: space(4),
+                paddingVertical: 12,
+                color: colors.text,
+                fontSize: 18,
+                fontWeight: '800',
+              }}
+            />
+
+            <Text style={{ ...type.tiny, color: colors.faint, marginTop: space(3) }}>TIME (MM:SS)</Text>
+            <TextInput
+              value={manualTime}
+              onChangeText={setManualTime}
+              keyboardType="numbers-and-punctuation"
+              style={{
+                marginTop: 6,
+                backgroundColor: colors.surfaceAlt,
+                borderRadius: radius.md,
+                paddingHorizontal: space(4),
+                paddingVertical: 12,
+                color: colors.text,
+                fontSize: 18,
+                fontWeight: '800',
+              }}
+            />
+
+            <View style={{ flexDirection: 'row', gap: space(3), marginTop: space(4) }}>
+              <Button label="Cancel" variant="ghost" onPress={() => setManualOpen(false)} style={{ flex: 1 }} />
+              <Button label="Save run" onPress={saveManualRun} style={{ flex: 1 }} />
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </Screen>
   );
 }

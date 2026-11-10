@@ -27,6 +27,7 @@ export function LogScreen({
   const [saving, setSaving] = useState(false);
   const [templateOpen, setTemplateOpen] = useState(false);
   const [templateName, setTemplateName] = useState('');
+  const [rpeTarget, setRpeTarget] = useState<{ exKey: string; setKey: string } | null>(null);
   /** Rest countdown, in ms remaining; null when idle. */
   const [restLeft, setRestLeft] = useState<number | null>(null);
   const REST_MS = 90_000;
@@ -88,6 +89,7 @@ export function LogScreen({
                 reps: '8',
                 distance: String(prevDistance ?? (isDistance ? 20 : 0)),
                 time: '',
+                rpe: '',
               },
             ],
           },
@@ -127,6 +129,7 @@ export function LogScreen({
               reps: last?.reps ?? '8',
               distance: last?.distance ?? '20',
               time: last?.time ?? '',
+              rpe: last?.rpe ?? '',
             },
           ],
         };
@@ -160,6 +163,7 @@ export function LogScreen({
         reps: Number.parseInt(s.reps, 10) || 0,
         distanceM: Number.parseFloat(s.distance.replace(',', '.')) || undefined,
         durationS: parseTime(s.time) || undefined,
+        rpe: Number.parseFloat(s.rpe) || undefined,
       })),
     }));
     await saveTemplate(name, exercises);
@@ -353,6 +357,7 @@ export function LogScreen({
                 onRemoveExercise={() => removeExercise(block.key)}
                 onRemoveSet={(setKey) => removeSet(block.key, setKey)}
                 onUpdateSet={(setKey, patch) => updateSet(block.key, setKey, patch)}
+                onSetRpe={(setKey) => setRpeTarget({ exKey: block.key, setKey })}
               />
             ))
           )}
@@ -402,6 +407,57 @@ export function LogScreen({
           loading={saving}
         />
       </View>
+
+      <Modal
+        visible={rpeTarget !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setRpeTarget(null)}
+      >
+        <Pressable
+          style={{ flex: 1, backgroundColor: '#000000AA', justifyContent: 'center', padding: space(6) }}
+          onPress={() => setRpeTarget(null)}
+        >
+          <Pressable style={{ backgroundColor: colors.surface, borderRadius: radius.lg, padding: space(5) }}>
+            <Text style={{ ...type.title, color: colors.text }}>Effort for this set</Text>
+            <Text style={{ ...type.caption, color: colors.muted, marginTop: 4 }}>
+              RPE — how hard did that set feel? 6 is “could do a few more”, 10 is a grinder.
+            </Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space(2), marginTop: space(4) }}>
+              {[6, 7, 8, 9, 10].map((value) => (
+                <Pressable
+                  key={value}
+                  onPress={() => {
+                    if (!rpeTarget) return;
+                    updateSet(rpeTarget.exKey, rpeTarget.setKey, { rpe: String(value) });
+                    setRpeTarget(null);
+                  }}
+                  style={{
+                    width: 46,
+                    height: 46,
+                    borderRadius: radius.md,
+                    backgroundColor: colors.surfaceAlt,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Text style={{ ...type.body, color: colors.text, fontWeight: '800' }}>{value}</Text>
+                </Pressable>
+              ))}
+            </View>
+            <Button
+              label="Clear RPE"
+              variant="ghost"
+              onPress={() => {
+                if (!rpeTarget) return;
+                updateSet(rpeTarget.exKey, rpeTarget.setKey, { rpe: '' });
+                setRpeTarget(null);
+              }}
+              style={{ marginTop: space(4) }}
+            />
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       <Modal
         visible={templateOpen}
@@ -460,6 +516,7 @@ function ExerciseBlock({
   onRemoveSet,
   onRemoveExercise,
   onUpdateSet,
+  onSetRpe,
 }: {
   block: DraftExercise;
   index: number;
@@ -467,6 +524,7 @@ function ExerciseBlock({
   onRemoveSet: (setKey: string) => void;
   onRemoveExercise: () => void;
   onUpdateSet: (setKey: string, patch: Partial<DraftSet>) => void;
+  onSetRpe: (setKey: string) => void;
 }) {
   const exercise = getExercise(block.exerciseId);
   const isDistance = exercise.measure === 'distance';
@@ -608,6 +666,17 @@ function ExerciseBlock({
                     selectTextOnFocus
                     style={[inputStyle, { width: 62 }]}
                   />
+                  <Pressable onPress={() => onSetRpe(set.key)} hitSlop={6} style={{ width: 30, alignItems: 'center' }}>
+                    <Text
+                      style={{
+                        fontSize: 10,
+                        fontWeight: '800',
+                        color: set.rpe ? colors.accentText : colors.faint,
+                      }}
+                    >
+                      {set.rpe ? '@' + set.rpe : 'RPE'}
+                    </Text>
+                  </Pressable>
                   <Text style={{ ...type.tiny, color: colors.faint, width: 56, textAlign: 'right', ...tabular }}>
                     {hasLoad
                       ? setLoadDistance >= 1000
@@ -633,6 +702,17 @@ function ExerciseBlock({
                     selectTextOnFocus
                     style={[inputStyle, { width: 56 }]}
                   />
+                  <Pressable onPress={() => onSetRpe(set.key)} hitSlop={6} style={{ width: 34, alignItems: 'center' }}>
+                    <Text
+                      style={{
+                        fontSize: 10,
+                        fontWeight: '800',
+                        color: set.rpe ? colors.accentText : colors.faint,
+                      }}
+                    >
+                      {set.rpe ? '@' + set.rpe : 'RPE'}
+                    </Text>
+                  </Pressable>
                   <Text style={{ ...type.tiny, color: colors.faint, width: 62, textAlign: 'right', ...tabular }}>
                     {setVolume >= 1000
                       ? `${(setVolume / 1000).toFixed(1)}k`

@@ -6,6 +6,36 @@ import type { TrackPoint } from '../lib/geo';
 import { tabular } from '../theme';
 
 export type CardFormat = 'story' | 'feed';
+export type CardTheme = 'dark' | 'light';
+
+const PALETTES: Record<CardTheme, {
+  bg: string;
+  panel: string;
+  routeBg: string;
+  text: string;
+  muted: string;
+  chip: string;
+  accent: string;
+}> = {
+  dark: {
+    bg: '#0C0C10',
+    panel: '#131319',
+    routeBg: '#14141B',
+    text: '#FFFFFF',
+    muted: '#8E8E9A',
+    chip: '#1D1D25',
+    accent: '#FF5A1F',
+  },
+  light: {
+    bg: '#FFFFFF',
+    panel: '#F1F1F5',
+    routeBg: '#EDEDF2',
+    text: '#0B0B0F',
+    muted: '#6C6C78',
+    chip: '#ECECF1',
+    accent: '#FF5A1F',
+  },
+};
 
 export type CardModel = {
   kind: 'lift' | 'run' | 'week';
@@ -18,6 +48,7 @@ export type CardModel = {
   load?: Partial<Record<string, number>>;
   track?: TrackPoint[];
   format: CardFormat;
+  theme?: CardTheme;
 };
 
 export const CARD_WIDTH = 360;
@@ -35,6 +66,7 @@ const ACCENT = '#FF5A1F';
  * rasterises it at 1080 px wide, which is exactly what Instagram wants.
  */
 export function ShareCard({ model }: { model: CardModel }) {
+  const pal = PALETTES[model.theme ?? 'dark'];
   const height = cardHeight(model.format);
   const statsBlock = 62;
   const visualHeight = height - 20 - 40 - 26 - statsBlock - 26 - 22 - 16;
@@ -44,7 +76,7 @@ export function ShareCard({ model }: { model: CardModel }) {
       style={{
         width: CARD_WIDTH,
         height,
-        backgroundColor: BG,
+        backgroundColor: pal.bg,
         padding: 20,
         borderRadius: 0,
       }}
@@ -56,33 +88,33 @@ export function ShareCard({ model }: { model: CardModel }) {
             width: 34,
             height: 34,
             borderRadius: 17,
-            backgroundColor: '#1D1D25',
+            backgroundColor: pal.chip,
             borderWidth: 1.5,
-            borderColor: ACCENT,
+            borderColor: pal.accent,
             alignItems: 'center',
             justifyContent: 'center',
           }}
         >
-          <Text style={{ color: TEXT, fontWeight: '900', fontSize: 14 }}>
+          <Text style={{ color: pal.text, fontWeight: '900', fontSize: 14 }}>
             {(model.athlete || 'A').trim().charAt(0).toUpperCase()}
           </Text>
         </View>
         <View style={{ flex: 1, marginLeft: 10 }}>
-          <Text style={{ color: TEXT, fontSize: 13.5, fontWeight: '800' }} numberOfLines={1}>
+          <Text style={{ color: pal.text, fontSize: 13.5, fontWeight: '800' }} numberOfLines={1}>
             {model.athlete || 'Athlete'}
           </Text>
-          <Text style={{ color: MUTED, fontSize: 10.5, fontWeight: '600', marginTop: 1 }} numberOfLines={1}>
+          <Text style={{ color: pal.muted, fontSize: 10.5, fontWeight: '600', marginTop: 1 }} numberOfLines={1}>
             {model.dateLine}
             {model.locationLine ? ` · ${model.locationLine}` : ''}
           </Text>
         </View>
-        <Text style={{ color: MUTED, fontSize: 16, letterSpacing: 1, marginTop: -6 }}>···</Text>
+        <Text style={{ color: pal.muted, fontSize: 16, letterSpacing: 1, marginTop: -6 }}>···</Text>
       </View>
 
       {/* title */}
       <Text
         style={{
-          color: TEXT,
+          color: pal.text,
           fontSize: 23,
           fontWeight: '800',
           letterSpacing: -0.6,
@@ -97,13 +129,13 @@ export function ShareCard({ model }: { model: CardModel }) {
       <View style={{ flexDirection: 'row', marginTop: 12, height: statsBlock }}>
         {model.stats.map((s, i) => (
           <View key={`${s.label}-${i}`} style={{ marginRight: i === model.stats.length - 1 ? 0 : 18 }}>
-            <Text style={{ color: MUTED, fontSize: 9.5, fontWeight: '700', letterSpacing: 0.4 }}>
+            <Text style={{ color: pal.muted, fontSize: 9.5, fontWeight: '700', letterSpacing: 0.4 }}>
               {s.label}
             </Text>
             <View style={{ flexDirection: 'row', alignItems: 'baseline', marginTop: 2 }}>
               <Text
                 style={{
-                  color: TEXT,
+                  color: pal.text,
                   fontSize: 19,
                   fontWeight: '800',
                   letterSpacing: -0.5,
@@ -113,7 +145,7 @@ export function ShareCard({ model }: { model: CardModel }) {
                 {s.value}
               </Text>
               {s.unit ? (
-                <Text style={{ color: MUTED, fontSize: 10, fontWeight: '700', marginLeft: 3 }}>{s.unit}</Text>
+                <Text style={{ color: pal.muted, fontSize: 10, fontWeight: '700', marginLeft: 3 }}>{s.unit}</Text>
               ) : null}
             </View>
           </View>
@@ -128,7 +160,7 @@ export function ShareCard({ model }: { model: CardModel }) {
             width={CARD_WIDTH - 40}
             height={visualHeight - 12}
             padding={26}
-            background="#14141B"
+            background={pal.routeBg}
           />
         ) : null}
 
@@ -137,7 +169,7 @@ export function ShareCard({ model }: { model: CardModel }) {
             style={{
               alignItems: 'center',
               justifyContent: 'center',
-              backgroundColor: '#131319',
+              backgroundColor: pal.panel,
               borderRadius: 10,
               paddingVertical: 8,
               height: Math.min(visualHeight - 6, 360),
@@ -158,12 +190,12 @@ export function ShareCard({ model }: { model: CardModel }) {
           height: 22,
         }}
       >
-        <Text style={{ color: MUTED, fontSize: 10.5, fontWeight: '600' }} numberOfLines={1}>
+        <Text style={{ color: pal.muted, fontSize: 10.5, fontWeight: '600' }} numberOfLines={1}>
           {model.caption ?? ''}
         </Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-          <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: ACCENT }} />
-          <Text style={{ color: TEXT, fontSize: 10.5, fontWeight: '900', letterSpacing: 1.6 }}>PROOF</Text>
+          <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: pal.accent }} />
+          <Text style={{ color: pal.text, fontSize: 10.5, fontWeight: '900', letterSpacing: 1.6 }}>PROOF</Text>
         </View>
       </View>
     </View>

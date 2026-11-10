@@ -10,6 +10,8 @@ export type SetEntry = {
   distanceM?: number;
   /** Seconds spent on a distance set — lets intervals carry a pace. */
   durationS?: number;
+  /** Rate of perceived exertion, 1–10. */
+  rpe?: number;
   isWarmup?: boolean;
 };
 

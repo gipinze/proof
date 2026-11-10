@@ -31,6 +31,8 @@ export type DraftSet = {
   distance: string;
   /** `1:45` or `105` — optional time for a distance set. */
   time: string;
+  /** Optional RPE, as typed (1–10). */
+  rpe: string;
 };
 
 export type DraftExercise = { key: string; exerciseId: string; sets: DraftSet[] };
@@ -55,12 +57,14 @@ export function draftToSets(draft: LiftDraft): SetEntry[] {
       const reps = Number.parseInt(set.reps, 10) || 0;
       const distance = Number.parseFloat(set.distance.replace(',', '.')) || 0;
       if (reps <= 0 && distance <= 0) continue;
+      const rpe = Number.parseFloat(set.rpe);
       out.push({
         exerciseId: block.exerciseId,
         weight,
         reps,
         distanceM: distance || undefined,
         durationS: parseTime(set.time) || undefined,
+        rpe: Number.isFinite(rpe) && rpe > 0 ? Math.min(10, rpe) : undefined,
       });
     }
   }

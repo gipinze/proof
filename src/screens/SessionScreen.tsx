@@ -123,7 +123,8 @@ export function SessionScreen({ nav, sessionId }: { nav: Nav; sessionId: number 
   const prCount = [...prs.values()].filter((p) => p.isPR).length;
 
   return (
-    <Screen scroll>
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+      <Screen scroll contentStyle={{ paddingBottom: space(4) }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space(3) }}>
         <IconButton icon="chevron-back" onPress={nav.back} size={34} bg={colors.surface} />
         <Text style={{ ...type.caption, color: colors.muted, flex: 1 }}>{fullDate(session.started_at)}</Text>
@@ -291,7 +292,7 @@ export function SessionScreen({ nav, sessionId }: { nav: Nav; sessionId: number 
                             ? `${i + 1}. ${s.weight > 0 ? `${s.weight}kg × ` : ''}${s.distance_m ?? 0}m${
                                 s.duration_s ? ` · ${duration(s.duration_s)}` : ''
                               }`
-                            : `${i + 1}. ${s.weight}×${s.reps}`}
+                            : `${i + 1}. ${s.weight}×${s.reps}${s.rpe ? ` @${s.rpe}` : ''}`}
                         </Text>
                       </View>
                     ))}
@@ -303,7 +304,20 @@ export function SessionScreen({ nav, sessionId }: { nav: Nav; sessionId: number 
         </>
       )}
 
-      <View style={{ flexDirection: 'row', gap: space(3), marginTop: space(7) }}>
+      </Screen>
+
+      <View
+        style={{
+          flexDirection: 'row',
+          gap: space(3),
+          paddingHorizontal: space(4),
+          paddingTop: space(3),
+          paddingBottom: space(5),
+          borderTopWidth: 1,
+          borderTopColor: colors.border,
+          backgroundColor: colors.surface,
+        }}
+      >
         {!isRun ? (
           <Button
             label="Edit sets"
@@ -320,10 +334,6 @@ export function SessionScreen({ nav, sessionId }: { nav: Nav; sessionId: number 
           style={{ flex: 1 }}
         />
       </View>
-
-      <Pressable onPress={() => nav.back()} style={{ marginTop: space(4), alignSelf: 'center' }}>
-        <Text style={{ ...type.caption, color: colors.faint }}>Back</Text>
-      </Pressable>
 
       <Modal visible={renaming} transparent animationType="fade" onRequestClose={() => setRenaming(false)}>
         <Pressable
@@ -359,6 +369,6 @@ export function SessionScreen({ nav, sessionId }: { nav: Nav; sessionId: number 
           </Pressable>
         </Pressable>
       </Modal>
-    </Screen>
+    </View>
   );
 }
