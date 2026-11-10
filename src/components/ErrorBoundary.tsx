@@ -3,6 +3,8 @@ import { ScrollView, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from './ui';
 import { colors, radius, space, type } from '../theme';
+import { LAST_ERROR_KEY } from '../db/settings';
+import { setSetting } from '../db/settings';
 
 /**
  * Render errors used to leave the app on a dead screen with no way out — on a
@@ -21,8 +23,10 @@ export class ErrorBoundary extends React.Component<Props, State> {
   }
 
   componentDidCatch(error: Error) {
-    // console goes to logcat in release builds, which is all we have
+    // logcat in release builds, plus a copy you can read in Settings
     console.error('Proof screen crashed:', error);
+    const stamp = new Date().toISOString().slice(0, 16).replace('T', ' ');
+    setSetting(LAST_ERROR_KEY, `${stamp} — ${error.message}`).catch(() => {});
   }
 
   render() {

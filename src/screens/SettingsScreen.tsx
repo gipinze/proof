@@ -3,6 +3,7 @@ import { Alert, Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Button, Card, IconButton, Screen, SectionLabel, TOP_INSET } from '../components/ui';
 import { exportBackup, listSessionSummaries } from '../db/db';
+import { getSetting, LAST_ERROR_KEY, setSetting } from '../db/settings';
 import {
   hasPreRestoreSnapshot,
   pickBackup,
@@ -19,6 +20,7 @@ export function SettingsScreen({ nav }: { nav: Nav }) {
   const [counts, setCounts] = useState({ sessions: 0, volume: 0 });
   const [busy, setBusy] = useState<'export' | 'folder' | 'restore' | 'undo' | null>(null);
   const [canUndo, setCanUndo] = useState(false);
+  const [lastError, setLastError] = useState('');
 
   const load = useCallback(async () => {
     const sessions = await listSessionSummaries(500);
@@ -27,6 +29,7 @@ export function SettingsScreen({ nav }: { nav: Nav }) {
       volume: sessions.reduce((sum, s) => sum + s.volume, 0),
     });
     setCanUndo(await hasPreRestoreSnapshot());
+    setLastError((await getSetting(LAST_ERROR_KEY)) ?? '');
   }, []);
 
   useEffect(() => {
@@ -188,6 +191,27 @@ export function SettingsScreen({ nav }: { nav: Nav }) {
             style={{ marginTop: space(2) }}
           />
         </Card>
+
+        {lastError ? (
+          <Card style={{ marginTop: space(4) }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space(2) }}>
+              <Ionicons name="bug-outline" size={15} color={colors.accentText} />
+              <Text style={{ ...type.caption, color: colors.text, flex: 1 }}>Last crash</Text>
+              <Pressable
+                onPress={async () => {
+                  await setSetting(LAST_ERROR_KEY, '');
+                  setLastError('');
+                }}
+                hitSlop={8}
+              >
+                <Text style={{ ...type.tiny, color: colors.accentText }}>CLEAR</Text>
+              </Pressable>
+            </View>
+            <Text style={{ ...type.tiny, color: colors.muted, marginTop: 4 }} selectable>
+              {lastError}
+            </Text>
+          </Card>
+        ) : null}
 
         <SectionLabel>How it works</SectionLabel>
         <Card>

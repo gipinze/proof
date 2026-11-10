@@ -22,4 +22,6 @@ export async function setSetting(key: string, value: string): Promise<void> {
 }
 
 export const ATHLETE_KEY = 'athlete_name';
+/** Last render error, so a crash leaves a trace you can read and report. */
+export const LAST_ERROR_KEY = 'last_error';
 export const LOCATION_KEY = 'home_location';
