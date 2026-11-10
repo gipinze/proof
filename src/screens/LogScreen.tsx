@@ -28,6 +28,9 @@ export function LogScreen({
   const [templateOpen, setTemplateOpen] = useState(false);
   const [templateName, setTemplateName] = useState('');
   const [rpeTarget, setRpeTarget] = useState<{ exKey: string; setKey: string } | null>(null);
+  const [platesOpen, setPlatesOpen] = useState(false);
+  const [plateTarget, setPlateTarget] = useState('100');
+  const BAR_KG = 20;
   /** Rest countdown, in ms remaining; null when idle. */
   const [restLeft, setRestLeft] = useState<number | null>(null);
   const REST_MS = 90_000;
@@ -222,7 +225,7 @@ export function LogScreen({
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <View style={{ flex: 1 }}>
-        <Screen scroll contentStyle={{ paddingBottom: space(4) }}>
+        <Screen scroll contentStyle={{ paddingBottom: space(24) }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: space(2) }}>
             <IconButton icon="chevron-back" onPress={discard} size={34} bg={colors.surface} />
             {editId ? (
@@ -299,6 +302,18 @@ export function LogScreen({
                 <Ionicons name="bookmark-outline" size={18} color={colors.muted} />
               </Pressable>
             ) : null}
+
+            <Pressable
+              onPress={() => {
+                const lastSet = draft.exercises[draft.exercises.length - 1]?.sets.slice(-1)[0];
+                setPlateTarget(lastSet?.weight || '100');
+                setPlatesOpen(true);
+              }}
+              hitSlop={8}
+              style={{ paddingHorizontal: space(1.5) }}
+            >
+              <Ionicons name="calculator-outline" size={18} color={colors.muted} />
+            </Pressable>
 
             <View
               style={{
@@ -407,6 +422,89 @@ export function LogScreen({
           loading={saving}
         />
       </View>
+
+      <Modal
+        visible={platesOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPlatesOpen(false)}
+      >
+        <Pressable
+          style={{ flex: 1, backgroundColor: '#000000AA', justifyContent: 'center', padding: space(6) }}
+          onPress={() => setPlatesOpen(false)}
+        >
+          <Pressable style={{ backgroundColor: colors.surface, borderRadius: radius.lg, padding: space(5) }}>
+            <Text style={{ ...type.title, color: colors.text }}>Plate maths</Text>
+            <Text style={{ ...type.caption, color: colors.muted, marginTop: 4 }}>
+              What to hang on each side of a {BAR_KG} kg bar.
+            </Text>
+            <TextInput
+              value={plateTarget}
+              onChangeText={setPlateTarget}
+              keyboardType="decimal-pad"
+              placeholder="100"
+              placeholderTextColor={colors.faint}
+              style={{
+                marginTop: space(4),
+                backgroundColor: colors.surfaceAlt,
+                borderRadius: radius.md,
+                paddingHorizontal: space(4),
+                paddingVertical: 13,
+                color: colors.text,
+                fontSize: 22,
+                fontWeight: '800',
+              }}
+            />
+            {(() => {
+              const target = Number.parseFloat(plateTarget.replace(',', '.')) || 0;
+              const perSide = Math.max(0, (target - BAR_KG) / 2);
+              const sizes = [25, 20, 15, 10, 5, 2.5, 1.25];
+              let left = perSide;
+              const plates: number[] = [];
+              for (const size of sizes) {
+                while (left + 0.001 >= size) {
+                  plates.push(size);
+                  left -= size;
+                }
+              }
+              return (
+                <View style={{ marginTop: space(4) }}>
+                  <Text style={{ ...type.tiny, color: colors.faint }}>PER SIDE</Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space(2), marginTop: space(2) }}>
+                    {plates.length === 0 ? (
+                      <Text style={{ ...type.caption, color: colors.muted }}>
+                        {target <= BAR_KG ? 'Just the bar, or lighter.' : 'No plates fit.'}
+                      </Text>
+                    ) : (
+                      plates.map((size, index) => (
+                        <View
+                          key={size + '-' + index}
+                          style={{
+                            backgroundColor: colors.accentDim,
+                            borderRadius: radius.pill,
+                            paddingHorizontal: space(3),
+                            paddingVertical: 6,
+                          }}
+                        >
+                          <Text style={{ ...type.caption, color: colors.accentText, fontWeight: '800' }}>
+                            {size}
+                          </Text>
+                        </View>
+                      ))
+                    )}
+                  </View>
+                  {left > 0.01 ? (
+                    <Text style={{ ...type.tiny, color: colors.muted, marginTop: space(2) }}>
+                      {left.toFixed(2)} kg per side can’t be made with standard plates.
+                    </Text>
+                  ) : null}
+                </View>
+              );
+            })()}
+            <Button label="Done" onPress={() => setPlatesOpen(false)} style={{ marginTop: space(4) }} />
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       <Modal
         visible={rpeTarget !== null}

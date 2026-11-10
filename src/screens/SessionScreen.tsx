@@ -124,7 +124,7 @@ export function SessionScreen({ nav, sessionId }: { nav: Nav; sessionId: number 
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
-      <Screen scroll contentStyle={{ paddingBottom: space(4) }}>
+      <Screen scroll contentStyle={{ paddingBottom: space(24) }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space(3) }}>
         <IconButton icon="chevron-back" onPress={nav.back} size={34} bg={colors.surface} />
         <Text style={{ ...type.caption, color: colors.muted, flex: 1 }}>{fullDate(session.started_at)}</Text>

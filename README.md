@@ -9,7 +9,7 @@ The point: you don't need Strava Premium, or any subscription, to post a
 correct-looking training card with a route on it.
 
 ```
-dist\proof-0.6.0.apk
+dist\proof-0.7.0.apk
 ```
 
 | Run card (story, 1080×1920) | Lift card (feed, 1080×1350) |
@@ -21,7 +21,7 @@ dist\proof-0.6.0.apk
 | ![Home](docs/screen-home.png) | ![Session](docs/screen-session-lift.png) | ![Library](docs/screen-library.png) |
 ---
 
-## What v0.6 does
+## What v0.7 does
 
 | Screen | What it does |
 | --- | --- |
@@ -32,6 +32,7 @@ dist\proof-0.6.0.apk
 | **Progress** | Home charts: volume for the last six weeks, and the muscles you actually hit this week. |
 | **Templates** | Save a session's exercises as "Push A" and start the next one from it, weights pre-filled. Long-press a chip to delete. |
 | **RPE** | Tap the `RPE` badge on a set to record effort 6–10; it follows the set into the history and the card. |
+| **Plate maths** | The calculator in the log header turns “120 kg” into the plates per side of a 20 kg bar. |
 | **Week recap** | A shareable Monday-to-now card: volume, sessions, distance and the whole week's muscle map. Cards come in a dark or light theme. |
 | **Session** | Full breakdown: volume, sets, an anatomy heatmap of what you trained — or the route. |
 | **Share card** | 9:16 story or 4:5 feed, exported at 1080 px wide, saved to the gallery or sent to any app. |
@@ -119,14 +120,14 @@ outshines the bench press you actually came to do.
 
 <https://github.com/gipinze/proof/releases/latest>
 
-Tap the `proof-0.6.0.apk` asset, then allow "install unknown apps" for your
+Tap the `proof-0.7.0.apk` asset, then allow "install unknown apps" for your
 browser when Android asks. Requires Android 7+ (`minSdkVersion 24`); the APK has
 `arm64-v8a` and `x86_64` binaries.
 
 Other routes:
 
 ```powershell
-adb install -r dist\proof-0.6.0.apk     # phone plugged in, USB debugging on
+adb install -r dist\proof-0.7.0.apk     # phone plugged in, USB debugging on
 npm run apk                             # rebuild the release APK yourself
 ```
 
@@ -284,7 +285,7 @@ Rules of thumb:
 
 ---
 
-## Deliberate v0.6 limits
+## Deliberate v0.7 limits
 
 - **Background run tracking is opt-in** (switch on the Run tab). It uses a
   foreground service and needs “Allow all the time” location; when it is off, or
@@ -312,7 +313,7 @@ Rules of thumb:
 5. **Split history charts** — volume per muscle group per week; spot what you skip.
 6. **Templates** — "Push A" that pre-fills exercises and last-used weights.
 8. **Weekly recap card** — the 7-day summary as its own story.
-7. **Per-set notes** and a plate calculator.
+7. **Per-set notes.**
 10. **Bodyweight mode** — reps-based volume for calisthenics.
 
 ---
