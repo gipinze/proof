@@ -3,7 +3,7 @@ import { Alert, Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Button, Card, IconButton, Screen, SectionLabel, TOP_INSET } from '../components/ui';
 import { exportBackup, listSessionSummaries } from '../db/db';
-import { getSetting, LAST_ERROR_KEY, setSetting } from '../db/settings';
+import { BODY_MODEL_KEY, getSetting, LAST_ERROR_KEY, setSetting } from '../db/settings';
 import {
   hasPreRestoreSnapshot,
   pickBackup,
@@ -21,6 +21,7 @@ export function SettingsScreen({ nav }: { nav: Nav }) {
   const [busy, setBusy] = useState<'export' | 'folder' | 'restore' | 'undo' | null>(null);
   const [canUndo, setCanUndo] = useState(false);
   const [lastError, setLastError] = useState('');
+  const [bodyModel, setBodyModel] = useState<'male' | 'female'>('male');
 
   const load = useCallback(async () => {
     const sessions = await listSessionSummaries(500);
@@ -30,6 +31,7 @@ export function SettingsScreen({ nav }: { nav: Nav }) {
     });
     setCanUndo(await hasPreRestoreSnapshot());
     setLastError((await getSetting(LAST_ERROR_KEY)) ?? '');
+    setBodyModel(((await getSetting(BODY_MODEL_KEY, 'male')) as 'male' | 'female') ?? 'male');
   }, []);
 
   useEffect(() => {
@@ -212,6 +214,52 @@ export function SettingsScreen({ nav }: { nav: Nav }) {
             </Text>
           </Card>
         ) : null}
+
+        <SectionLabel>Body map</SectionLabel>
+        <Card>
+          <Text style={{ ...type.caption, color: colors.muted }}>
+            Which body the muscle map draws. The muscles are the same either way.
+          </Text>
+          <View style={{ flexDirection: 'row', gap: space(2), marginTop: space(3) }}>
+            {(['male', 'female'] as const).map((option) => {
+              const active = bodyModel === option;
+              return (
+                <Pressable
+                  key={option}
+                  onPress={async () => {
+                    setBodyModel(option);
+                    await setSetting(BODY_MODEL_KEY, option);
+                    nav.bump();
+                  }}
+                  style={{
+                    flex: 1,
+                    alignItems: 'center',
+                    paddingVertical: space(3),
+                    borderRadius: radius.md,
+                    backgroundColor: active ? colors.accent : colors.surfaceAlt,
+                  }}
+                >
+                  <Ionicons
+                    name={option === 'female' ? 'woman-outline' : 'man-outline'}
+                    size={18}
+                    color={active ? '#fff' : colors.muted}
+                  />
+                  <Text
+                    style={{
+                      ...type.caption,
+                      color: active ? '#fff' : colors.muted,
+                      fontWeight: '700',
+                      marginTop: 4,
+                      textTransform: 'capitalize',
+                    }}
+                  >
+                    {option}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </Card>
 
         <SectionLabel>How it works</SectionLabel>
         <Card>

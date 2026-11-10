@@ -16,6 +16,8 @@ import { captureCard, cardFilename, nameCard, saveToGallery, shareImage } from '
 import { normalisedLoad } from '../lib/volume';
 import type { Nav } from '../nav';
 import { useBottomInset } from '../lib/insets';
+import { BODY_MODEL_KEY, getSetting } from '../db/settings';
+import type { BodyModel } from '../data/anatomy';
 import { colors, radius, space, type } from '../theme';
 
 function startOfWeek(): number {
@@ -31,10 +33,12 @@ export function ShareWeekScreen({ nav, athlete }: { nav: Nav; athlete: string })
   const [summary, setSummary] = useState<WeekSummary | null>(null);
   const [format, setFormat] = useState<CardFormat>('story');
   const [theme, setTheme] = useState<CardTheme>('dark');
+  const [bodyModel, setBodyModel] = useState<BodyModel>('male');
   const [busy, setBusy] = useState<'save' | 'share' | null>(null);
   const cardRef = useRef<React.ComponentRef<typeof View>>(null);
 
   const load = useCallback(async () => {
+    setBodyModel(((await getSetting(BODY_MODEL_KEY, 'male')) as BodyModel) ?? 'male');
     setSummary(await weekSummary(startOfWeek()));
   }, []);
 
@@ -59,8 +63,9 @@ export function ShareWeekScreen({ nav, athlete }: { nav: Nav; athlete: string })
       load: normalisedLoad(summary.muscle as never),
       format,
       theme,
+      bodyModel,
     };
-  }, [summary, athlete, format, theme]);
+  }, [summary, athlete, format, theme, bodyModel]);
 
   const capture = async () => {
     if (!cardRef.current) throw new Error('Card is not ready yet');

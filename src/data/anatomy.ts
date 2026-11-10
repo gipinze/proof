@@ -8,17 +8,30 @@
 // The artwork puts both views in one coordinate space: the front view occupies
 // x 0..724 and the back view x 724..1448, each 1448 tall.
 
-import { FRONT } from './body/front';
-import { BACK } from './body/back';
+import { FRONT } from './body/front-male';
+import { BACK } from './body/back-male';
+import { FEMALE_FRONT } from './body/front-female';
+import { FEMALE_BACK } from './body/back-female';
 import type { BodyPart } from './body/types';
 
 export type { BodyPart };
 export type { MuscleId } from './muscles';
 
+export type BodyModel = 'male' | 'female';
+
 export const VIEW = {
   front: { viewBox: '0 0 724 1448', parts: FRONT },
   back: { viewBox: '724 0 724 1448', parts: BACK },
+  femaleFront: { viewBox: '0 0 724 1448', parts: FEMALE_FRONT },
+  femaleBack: { viewBox: '724 0 724 1448', parts: FEMALE_BACK },
 } as const;
+
+/** The two views for a chosen body model. */
+export function viewsFor(model: BodyModel) {
+  return model === 'female'
+    ? { front: VIEW.femaleFront, back: VIEW.femaleBack }
+    : { front: VIEW.front, back: VIEW.back };
+}
 
 /** Aspect ratio of one body view (width / height). */
 export const BODY_ASPECT = 724 / 1448;

@@ -16,6 +16,8 @@ import { muscleLoad, normalisedLoad, summarizeSets, type SetEntry } from '../lib
 import type { TrackPoint } from '../lib/geo';
 import type { Nav } from '../nav';
 import { useBottomInset } from '../lib/insets';
+import { BODY_MODEL_KEY, getSetting } from '../db/settings';
+import type { BodyModel } from '../data/anatomy';
 import { colors, radius, space, type } from '../theme';
 
 export function ShareScreen({
@@ -32,11 +34,13 @@ export function ShareScreen({
   const [sets, setSets] = useState<SetEntry[]>([]);
   const [format, setFormat] = useState<CardFormat>('story');
   const [theme, setTheme] = useState<CardTheme>('dark');
+  const [bodyModel, setBodyModel] = useState<BodyModel>('male');
   const [busy, setBusy] = useState<'save' | 'share' | null>(null);
   const [prCount, setPrCount] = useState(0);
   const cardRef = useRef<React.ComponentRef<typeof View>>(null);
 
   const load = useCallback(async () => {
+    setBodyModel(((await getSetting(BODY_MODEL_KEY, 'male')) as BodyModel) ?? 'male');
     const row = await getSession(sessionId);
     setSession(row);
     if (row?.kind === 'lift') {
@@ -125,8 +129,9 @@ export function ShareScreen({
       load: normalisedLoad(muscleLoad(sets)),
       format,
       theme,
+      bodyModel,
     };
-  }, [session, sets, format, theme, athlete]);
+  }, [session, sets, format, theme, bodyModel, athlete]);
 
   const capture = async () => {
     if (!cardRef.current) throw new Error('Card is not ready yet');

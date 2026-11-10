@@ -1,7 +1,7 @@
 import React from 'react';
 import { View } from 'react-native';
 import Svg, { G, Path } from 'react-native-svg';
-import { BODY_ASPECT, VIEW, slugIntensity } from '../data/anatomy';
+import { BODY_ASPECT, slugIntensity, viewsFor, type BodyModel } from '../data/anatomy';
 import type { MuscleId } from '../data/muscles';
 import { colors } from '../theme';
 
@@ -36,10 +36,12 @@ type BodyProps = {
   load?: Partial<Record<MuscleId, number>>;
   width: number;
   height: number;
+  /** Which body to draw; both models share the same muscle slugs. */
+  model?: BodyModel;
 };
 
-export function MuscleBody({ view, load = {}, width, height }: BodyProps) {
-  const { viewBox, parts } = VIEW[view];
+export function MuscleBody({ view, load = {}, width, height, model = 'male' }: BodyProps) {
+  const { viewBox, parts } = viewsFor(model)[view];
 
   return (
     <Svg width={width} height={height} viewBox={viewBox}>
@@ -65,15 +67,15 @@ export function MuscleBody({ view, load = {}, width, height }: BodyProps) {
 }
 
 type PairProps = {
-  load?: Partial<Record<MuscleId, number>>;
+  load?: Partial<Record<string, number>>;
   height: number;
   gap?: number;
   views?: ('front' | 'back')[];
-  /** Shrink the figures if both would not fit inside this width. */
   maxWidth?: number;
+  model?: BodyModel;
 };
 
-export function AnatomyPair({ load, height, gap = 6, views = ['front', 'back'], maxWidth }: PairProps) {
+export function AnatomyPair({ load = {}, height, gap = 6, views = ['front', 'back'], maxWidth, model = 'male' }: PairProps) {
   const count = views.length;
   const maxHeightForWidth = maxWidth ? (maxWidth - gap * (count - 1)) / count / BODY_ASPECT : Infinity;
   const h = Math.min(height, maxHeightForWidth);
@@ -81,7 +83,7 @@ export function AnatomyPair({ load, height, gap = 6, views = ['front', 'back'], 
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap, justifyContent: 'center' }}>
       {views.map((v) => (
-        <MuscleBody key={v} view={v} load={load} width={width} height={h} />
+        <MuscleBody key={v} view={v} load={load} width={width} height={h} model={model} />
       ))}
     </View>
   );

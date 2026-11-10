@@ -49,6 +49,8 @@ export type CardModel = {
   track?: TrackPoint[];
   format: CardFormat;
   theme?: CardTheme;
+  /** Which body the anatomy drawing uses. */
+  bodyModel?: 'male' | 'female';
 };
 
 export const CARD_WIDTH = 360;
@@ -175,7 +177,13 @@ export function ShareCard({ model }: { model: CardModel }) {
               height: Math.min(visualHeight - 6, 360),
             }}
           >
-            <AnatomyPair load={model.load} height={Math.min(visualHeight - 22, 348)} gap={2} maxWidth={CARD_WIDTH - 48} />
+            <AnatomyPair
+              load={model.load}
+              height={Math.min(visualHeight - 22, 348)}
+              gap={2}
+              maxWidth={CARD_WIDTH - 48}
+              model={model.bodyModel ?? 'male'}
+            />
           </View>
         ) : null}
       </View>

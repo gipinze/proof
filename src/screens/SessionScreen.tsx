@@ -22,6 +22,8 @@ import { muscleLoad, normalisedLoad, rankedMuscles, summarizeSets, type SetEntry
 import type { TrackPoint } from '../lib/geo';
 import type { Nav } from '../nav';
 import { useBottomInset } from '../lib/insets';
+import { BODY_MODEL_KEY, getSetting } from '../db/settings';
+import type { BodyModel } from '../data/anatomy';
 import { colors, radius, space, tabular, type } from '../theme';
 
 export function SessionScreen({ nav, sessionId }: { nav: Nav; sessionId: number }) {
@@ -32,17 +34,19 @@ export function SessionScreen({ nav, sessionId }: { nav: Nav; sessionId: number 
   const [renaming, setRenaming] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
   const [prs, setPrs] = useState<Map<string, SessionPR>>(new Map());
+  const [bodyModel, setBodyModel] = useState<BodyModel>('male');
 
   const load = useCallback(async () => {
     const row = await getSession(sessionId);
     setSession(row);
     if (row) setTitleDraft(row.title);
+    setBodyModel(((await getSetting(BODY_MODEL_KEY, 'male')) as BodyModel) ?? 'male');
     if (row?.kind === 'lift') {
       const stored = await getSessionSets(sessionId);
       setSets(stored);
       setPrs(await personalRecords(row, stored).catch(() => new Map()));
     }
-  }, [sessionId]);
+  }, [sessionId, nav.dataVersion]);
 
   useEffect(() => {
     load().catch(() => {});
@@ -219,7 +223,7 @@ export function SessionScreen({ nav, sessionId }: { nav: Nav; sessionId: number 
           ) : null}
 
           <Card style={{ marginTop: space(5), alignItems: 'center', paddingVertical: space(4) }}>
-            <AnatomyPair load={load01} height={300} gap={10} maxWidth={winW - 64} />
+            <AnatomyPair load={load01} height={300} gap={10} maxWidth={winW - 64} model={bodyModel} />
             <Text
               style={{ ...type.caption, color: colors.muted, marginTop: space(3), textAlign: 'center' }}
               numberOfLines={2}

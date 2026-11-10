@@ -43,6 +43,7 @@ yarn-error.*
 # local build artefacts
 .cache/
 preview/
+.tmp-tests/
 
 
 # signing material (never commit)
